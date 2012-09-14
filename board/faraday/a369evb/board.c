@@ -17,25 +17,21 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __A369_H
-#define __A369_H
+#include <common.h>
 
-#include <asm/sizes.h>
+DECLARE_GLOBAL_DATA_PTR;
 
-#ifndef __ASSEMBLY__
+int board_init(void)
+{
+	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
 
-#define REG32(off)	*(volatile unsigned long *)(off)
-#define REG16(off)	*(volatile unsigned short *)(off)
-#define REG8(off)	*(volatile unsigned char *)(off)
+	return 0;
+}
 
-#endif /* __ASSEMBLY__ */
+int dram_init(void)
+{
+	gd->ram_size = CONFIG_SYS_SDRAM_SIZE;
 
-/*
- * Hardware register base
- */
-#define CONFIG_FTUART010_BASE	0x92B00000	/* UART controller */
-#define CONFIG_FTPWMTMR010_BASE	0x92300000	/* Timer controller */
-#define CONFIG_SCU_BASE		0x92000000
-#define CONFIG_FTWDT010_BASE	0x92200000	/* Watchdod */
+	return 0;
+}
 
-#endif	/* __A369_H */

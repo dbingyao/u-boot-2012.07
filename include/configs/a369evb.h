@@ -49,6 +49,8 @@
  * Timer
  */
 #define CONFIG_SYS_HZ		1000	/* timer ticks per second */
+#define CONFIG_MAIN_CLK		33000000
+
 
 /*
  * Serial console configuration
@@ -80,7 +82,6 @@
 #define CONFIG_CMD_RUN		/* run command in env variable  */
 #define CONFIG_CMD_CACHE	/* cache enable/disable command */
 #define CONFIG_VERSION_VARIABLE
-#define CONFIG_CMD_DATE
 #define CONFIG_CMD_PING
 
 /*
