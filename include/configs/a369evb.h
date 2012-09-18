@@ -31,6 +31,11 @@
 #define CONFIG_MACH_TYPE	MACH_TYPE_FARADAY
 
 /*
+ * CPU
+ */
+#define CONFIG_DISPLAY_CPUINFO
+
+/*
  * Linux kernel tagged list
  * Make the "bootargs" environment variable is used by Linux kernel as
  * command-line tag.
