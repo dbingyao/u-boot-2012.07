@@ -26,9 +26,45 @@
 #include <asm/system.h>
 
 
+static inline unsigned int get_line_size(void)
+{
+	unsigned int val;
+
+	asm volatile (
+		"mrc p15, 0, %0, c0, c0, 1"
+		: "=r"(val) : : "cc");
+
+	return  (1 << (3 +((val >> 12) & 0x3)));
+}
+
 int arch_cpu_init(void)
 {
 	return 0;
+}
+
+void flush_dcache_range(unsigned long start, unsigned long stop)
+{
+	unsigned long align, mask;
+
+	align = get_line_size();
+	mask  = ~(align - 1);
+
+	/* aligned to cache line */
+	stop  = (stop + (align - 1)) & mask;
+	start = start & mask;
+
+	asm volatile (
+		"1:\n"
+		"mcr p15,0,%0,c7,c14,1\n"	/* clean & invalidate d-cache line */
+		"add %0,%0,%2\n"
+		"cmp %0,%1\n"
+		"blo 1b\n"
+		"mov r3,#0\n"
+		"mcr p15,0,r3,c7,c10,4\n"	/* drain write buffer */
+		: "+r"(start)	/* output */
+		: "r"(stop), "r"(align)	/* input */
+		: "r3"	/* clobber list */
+		);
 }
 
 void flush_dcache_all(void)
@@ -38,6 +74,42 @@ void flush_dcache_all(void)
 		      "mcr p15,0,r0,c7,c10,4\n"       /* drain write buffer */
 		      : : : "r0");
 }
+
+void flush_cache(unsigned long start, unsigned long size)
+{
+	flush_dcache_range(start, start + size);
+}
+
+void invalidate_dcache_range(unsigned long start, unsigned long stop)
+{
+	unsigned long align, mask;
+
+	align = get_line_size();
+	mask  = ~(align - 1);
+
+	/* aligned to cache line */
+	stop  = (stop + (align - 1)) & mask;
+	start = start & mask;
+
+	asm volatile (
+		"1:\n"
+		"mcr p15,0,%0,c7,c6,1\n"	/* invalidate cache line */
+		"add %0,%0,%2\n"
+		"cmp %0,%1\n"
+		"blo 1b\n"
+		: "+r"(start)	/* output */
+		: "r"(stop), "r"(align)	/* input */
+		);
+}
+
+void invalidate_dcache_all(void)
+{
+	asm volatile (
+		"mov r0,#0\n"
+		"mcr p15,0,r0,c7,c6,0\n"	/* invalidate d-cache all */
+		: : : "r0");
+}
+
 
 void invalidate_icache_all(void)
 {
@@ -51,11 +123,21 @@ void enable_caches(void)
 {
 #if !defined(CONFIG_SYS_DCACHE_OFF)
 	dcache_enable();
+#else
+	dcache_disable();
 #endif
 
 #if !defined(CONFIG_SYS_ICACHE_OFF)
 	icache_enable();
+#else
+	icache_disable();
 #endif
+	printf ("Data (writethrough) Cache is %s\n",
+		dcache_status() ? "ON" : "OFF");
+
+	printf ("Instruction Cache is %s\n",
+		icache_status() ? "ON" : "OFF");
+
 }
 
 #ifdef CONFIG_DISPLAY_CPUINFO
@@ -92,12 +174,6 @@ int print_cpuinfo(void)
 		(unsigned int)(icache_sz >> 10),
 		(unsigned int)(dcacahe_sz >> 10),
 		(unsigned int)line_sz);
-
-	printf ("Data (writethrough) Cache is %s\n",
-		dcache_status() ? "ON" : "OFF");
-
-	printf ("Instruction Cache is %s\n",
-		icache_status() ? "ON" : "OFF");
 
 	printf("AHB:   %u MHz\n", (unsigned int)(clk_get_rate("AHB") / 1000000));
 	printf("APB:   %u MHz\n", (unsigned int)(clk_get_rate("APB") / 1000000));

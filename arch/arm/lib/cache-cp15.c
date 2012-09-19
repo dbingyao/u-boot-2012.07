@@ -24,6 +24,16 @@
 #include <common.h>
 #include <asm/system.h>
 
+static void cp_delay (void)
+{
+	volatile int i;
+
+	/* copro seems to need some delay between reading and writing */
+	for (i = 0; i < 100; i++)
+		nop();
+	asm volatile("" : : : "memory");
+}
+
 #if !(defined(CONFIG_SYS_ICACHE_OFF) && defined(CONFIG_SYS_DCACHE_OFF))
 
 #if defined(CONFIG_SYS_ARM_CACHE_WRITETHROUGH)
@@ -39,16 +49,6 @@ void __arm_init_before_mmu(void)
 }
 void arm_init_before_mmu(void)
 	__attribute__((weak, alias("__arm_init_before_mmu")));
-
-static void cp_delay (void)
-{
-	volatile int i;
-
-	/* copro seems to need some delay between reading and writing */
-	for (i = 0; i < 100; i++)
-		nop();
-	asm volatile("" : : : "memory");
-}
 
 static inline void dram_bank_mmu_setup(int bank)
 {
@@ -109,6 +109,7 @@ static void cache_enable(uint32_t cache_bit)
 	cp_delay();
 	set_cr(reg | cache_bit);
 }
+#endif
 
 /* cache_bit must be either CR_I or CR_C */
 static void cache_disable(uint32_t cache_bit)
@@ -128,7 +129,6 @@ static void cache_disable(uint32_t cache_bit)
 	}
 	set_cr(reg & ~cache_bit);
 }
-#endif
 
 #ifdef CONFIG_SYS_ICACHE_OFF
 void icache_enable (void)
@@ -136,20 +136,12 @@ void icache_enable (void)
 	return;
 }
 
-void icache_disable (void)
-{
-	return;
-}
-
-int icache_status (void)
-{
-	return 0;					/* always off */
-}
 #else
 void icache_enable(void)
 {
 	cache_enable(CR_I);
 }
+#endif
 
 void icache_disable(void)
 {
@@ -160,7 +152,6 @@ int icache_status(void)
 {
 	return (get_cr() & CR_I) != 0;
 }
-#endif
 
 #ifdef CONFIG_SYS_DCACHE_OFF
 void dcache_enable (void)
@@ -168,20 +159,12 @@ void dcache_enable (void)
 	return;
 }
 
-void dcache_disable (void)
-{
-	return;
-}
-
-int dcache_status (void)
-{
-	return 0;					/* always off */
-}
 #else
 void dcache_enable(void)
 {
 	cache_enable(CR_C);
 }
+#endif
 
 void dcache_disable(void)
 {
@@ -192,4 +175,3 @@ int dcache_status(void)
 {
 	return (get_cr() & CR_C) != 0;
 }
-#endif
