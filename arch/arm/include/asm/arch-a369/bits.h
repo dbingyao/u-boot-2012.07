@@ -16,28 +16,40 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+#ifndef ASM_ARCH_BITS_H
+#define ASM_ARCH_BITS_H
 
-#ifndef __A369_H
-#define __A369_H
+#define BIT0  (1<<0)
+#define BIT1  (1<<1)
+#define BIT2  (1<<2)
+#define BIT3  (1<<3)
+#define BIT4  (1<<4)
+#define BIT5  (1<<5)
+#define BIT6  (1<<6)
+#define BIT7  (1<<7)
+#define BIT8  (1<<8)
+#define BIT9  (1<<9)
+#define BIT10 (1<<10)
+#define BIT11 (1<<11)
+#define BIT12 (1<<12)
+#define BIT13 (1<<13)
+#define BIT14 (1<<14)
+#define BIT15 (1<<15)
+#define BIT16 (1<<16)
+#define BIT17 (1<<17)
+#define BIT18 (1<<18)
+#define BIT19 (1<<19)
+#define BIT20 (1<<20)
+#define BIT21 (1<<21)
+#define BIT22 (1<<22)
+#define BIT23 (1<<23)
+#define BIT24 (1<<24)
+#define BIT25 (1<<25)
+#define BIT26 (1<<26)
+#define BIT27 (1<<27)
+#define BIT28 (1<<28)
+#define BIT29 (1<<29)
+#define BIT30 (1<<30)
+#define BIT31 (1<<31)
 
-#include <asm/sizes.h>
-
-#ifndef __ASSEMBLY__
-
-#define REG32(off)	*(volatile unsigned long *)(off)
-#define REG16(off)	*(volatile unsigned short *)(off)
-#define REG8(off)	*(volatile unsigned char *)(off)
-
-#endif /* __ASSEMBLY__ */
-
-/*
- * Hardware register base
- */
-#define CONFIG_FTUART010_BASE 	0x92B00000	/* UART controller */
-#define CONFIG_FTPWMTMR010_BASE 0x92300000	/* Timer controller */
-#define CONFIG_SCU_BASE 	0x92000000
-#define CONFIG_FTWDT010_BASE	0x92200000	/* Watchdog */
-#define CONFIG_FTGMAC100_BASE	0x90C00000	/* Ethernet Controller */
-#define CONFIG_FTNANDC021_BASE	0x90200000	/* Nand Controller */
-
-#endif	/* __A369_H */
+#endif /* ASM_ARCH_BITS_H */

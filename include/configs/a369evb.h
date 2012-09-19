@@ -92,9 +92,11 @@
 /*
  * Environment variables
  */
-#define CONFIG_ENV_IS_NOWHERE
-#define CONFIG_ENV_SIZE		0x20000
-
+#define CONFIG_ENV_IS_IN_NAND
+#define CONFIG_ENV_OFFSET		0x07FC0000
+#define CONFIG_ENV_OFFSET_REDUND	0x07FE0000
+#define CONFIG_ENV_SIZE 		0x20000
+#define CONFIG_CMD_SAVEENV
 
 /*
  * Warning: changing CONFIG_SYS_TEXT_BASE requires
@@ -172,7 +174,22 @@
 /*
  * FLASH and environment organization
  */
-#define CONFIG_SYS_NO_FLASH
+/*
+ * NOR Flash
+ */
 #undef CONFIG_CMD_IMLS
+#define CONFIG_SYS_NO_FLASH
+
+/*
+ * NAND Flash
+ */
+#define CONFIG_NAND_FTNANDC021
+#define CONFIG_FTNANDC021_ACTIMING_1    0x02240264
+#define CONFIG_FTNANDC021_ACTIMING_2    0x42054209
+#define CONFIG_SYS_MAX_NAND_DEVICE	1 /* Max number of NAND devices */
+#define CONFIG_SYS_NAND_BASE		CONFIG_FTNANDC021_BASE
+#define CONFIG_SYS_NAND_BASE_LIST	{ CONFIG_FTNANDC021_BASE }
+#define CONFIG_MTD_NAND_VERIFY_WRITE
+#define CONFIG_CMD_NAND
 
 #endif	/* __CONFIG_H */
