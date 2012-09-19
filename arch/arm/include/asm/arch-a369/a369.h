@@ -33,9 +33,10 @@
 /*
  * Hardware register base
  */
-#define CONFIG_FTUART010_BASE	0x92B00000	/* UART controller */
-#define CONFIG_FTPWMTMR010_BASE	0x92300000	/* Timer controller */
-#define CONFIG_SCU_BASE		0x92000000
-#define CONFIG_FTWDT010_BASE	0x92200000	/* Watchdod */
+#define CONFIG_FTUART010_BASE 	0x92B00000	/* UART controller */
+#define CONFIG_FTPWMTMR010_BASE 0x92300000	/* Timer controller */
+#define CONFIG_SCU_BASE 	0x92000000
+#define CONFIG_FTWDT010_BASE	0x92200000	/* Watchdog */
+#define CONFIG_FTGMAC100_BASE	0x90C00000	/* Ethernet Controller */
 
 #endif	/* __A369_H */

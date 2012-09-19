@@ -34,6 +34,7 @@
  * CPU
  */
 #define CONFIG_DISPLAY_CPUINFO
+#define CONFIG_SYS_DCACHE_OFF
 
 /*
  * Linux kernel tagged list
@@ -87,7 +88,6 @@
 #define CONFIG_CMD_RUN		/* run command in env variable  */
 #define CONFIG_CMD_CACHE	/* cache enable/disable command */
 #define CONFIG_VERSION_VARIABLE
-#define CONFIG_CMD_PING
 
 /*
  * Environment variables
@@ -155,6 +155,19 @@
 #define CONFIG_STACKSIZE_IRQ        SZ_32K
 #define CONFIG_STACKSIZE_FIQ        SZ_32K
 #endif
+
+/*
+ * Network
+ */
+#define CONFIG_FTGMAC100
+#define CONFIG_ETHADDR		00:84:14:72:61:69  /* used by common/env_common.c */
+#define CONFIG_NETMASK		255.255.255.0
+#define CONFIG_IPADDR		192.168.68.67
+#define CONFIG_SERVERIP 	192.168.68.66
+#define CONFIG_PHY_MAX_ADDR	32
+#define CONFIG_NET_RETRY_COUNT	20
+#define CONFIG_DRIVER_ETHER
+#define CONFIG_CMD_PING
 
 /*
  * FLASH and environment organization

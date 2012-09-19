@@ -1,16 +1,18 @@
 /*
- * Faraday FTGMAC100 Ethernet
+ * (C) Copyright 2012 Faraday Technology
+ * Bing-Yao,Luo <bjluo@faraday-tech.com>
  *
- * (C) Copyright 2009 Faraday Technology
- * Po-Yu Chuang <ratbert@faraday-tech.com>
+ * (C) Copyright 2010
+ * Faraday Technology Inc. <www.faraday-tech.com>
+ * Dante Su <dantesu@gmail.com>
  *
- * (C) Copyright 2010 Andes Technology
- * Macpaul Lin <macpaul@andestech.com>
+ * See file CREDITS for list of people who contributed to this
+ * project.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
+ * the License, or (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -19,549 +21,526 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+ * MA 02111-1307 USA
  */
 
-#include <config.h>
 #include <common.h>
+#include <command.h>
 #include <malloc.h>
 #include <net.h>
+#include <miiphy.h>
 #include <asm/io.h>
-#include <linux/mii.h>
+#include <asm/arch/dma-mapping.h>
 
 #include "ftgmac100.h"
 
-#define ETH_ZLEN	60
+#define DEBUG_DESC		0
+#define DEBUG_TX		0
+#define DEBUG_RX		0
 
-/* RBSR - hw default init value is also 0x640 */
-#define RBSR_DEFAULT_VALUE	0x640
+#define CFG_RXDES_NUM	8
+#define CFG_TXDES_NUM	2
+#define CFG_XBUF_SIZE	1536
 
-/* PKTBUFSTX/PKTBUFSRX must both be power of 2 */
-#define PKTBUFSTX	4	/* must be power of 2 */
+struct ftgmac100_priv
+{
+	uint32_t		iobase;
+	uint32_t		irqmask;
+	uint32_t		maccr;
+	uint32_t		lnkup;
 
-struct ftgmac100_data {
-	struct ftgmac100_txdes txdes[PKTBUFSTX];
-	struct ftgmac100_rxdes rxdes[PKTBUFSRX];
-	int tx_index;
-	int rx_index;
-	int phy_addr;
+	volatile RX_DESC	*rx_descs;
+	uint32_t		rx_descs_dma;
+	uint32_t		rx_idx;
+
+	volatile TX_DESC	*tx_descs;
+	uint32_t		tx_descs_dma;
+	uint32_t		tx_idx;
+
+	uint32_t		phy_addr;
+	struct {
+		uint32_t	oui   : 24;
+		uint32_t	model :  6;
+		uint32_t	rsvd  : 30;
+		uint32_t	rev   :  4;
+	} phy_id;
 };
 
-/*
- * struct mii_bus functions
- */
-static int ftgmac100_mdiobus_read(struct eth_device *dev, int phy_addr,
-	int regnum)
+#define EMAC_REG32(dev, off)	*(volatile uint32_t *)((dev)->iobase + (off))
+
+DECLARE_GLOBAL_DATA_PTR;
+
+static char ftgmac100_mac_addr[] = { 0x00, 0x41, 0x71, 0x00, 0x00, 0x52 };
+
+static int ftgmac100_reset(struct eth_device *dev);
+
+static uint16_t mdio_read(struct eth_device *dev, uint8_t phyaddr, uint8_t phyreg)
 {
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
-	int phycr;
-	int i;
+	uint32_t tmp;
 
-	phycr = readl(&ftgmac100->phycr);
+	tmp = MIIREG_READ
+	      | (phyaddr << MIIREG_PHYADDR_SHIFT)
+	      | (phyreg  << MIIREG_PHYREG_SHIFT)
+	      | 0x3000003F;
 
-	/* preserve MDC cycle threshold */
-	phycr &= FTGMAC100_PHYCR_MDC_CYCTHR_MASK;
+	EMAC_REG32(dev, PHYCR_REG) = tmp;
 
-	phycr |= FTGMAC100_PHYCR_PHYAD(phy_addr)
-	      |  FTGMAC100_PHYCR_REGAD(regnum)
-	      |  FTGMAC100_PHYCR_MIIRD;
+	do {
+		tmp = EMAC_REG32(dev, PHYCR_REG);
+	} while(tmp & MIIREG_READ);
 
-	writel(phycr, &ftgmac100->phycr);
+	tmp = EMAC_REG32(dev, PHYDATA_REG);
 
-	for (i = 0; i < 10; i++) {
-		phycr = readl(&ftgmac100->phycr);
+	return (uint16_t)(tmp >> 16);
+}
 
-		if ((phycr & FTGMAC100_PHYCR_MIIRD) == 0) {
-			int data;
+static void mdio_write(struct eth_device *dev, uint8_t phyaddr, uint8_t phyreg, uint16_t phydata)
+{
+	unsigned int tmp;
 
-			data = readl(&ftgmac100->phydata);
-			return FTGMAC100_PHYDATA_MIIRDATA(data);
-		}
+	tmp = MIIREG_WRITE
+	      | (phyaddr << MIIREG_PHYADDR_SHIFT)
+	      | (phyreg  << MIIREG_PHYREG_SHIFT)
+	      | 0x3000003F;
 
-		mdelay(10);
+	EMAC_REG32(dev, PHYDATA_REG) = phydata;
+	EMAC_REG32(dev, PHYCR_REG)   = tmp;
+
+	do {
+		tmp = EMAC_REG32(dev, PHYCR_REG);
+	} while(tmp & MIIREG_WRITE);
+}
+
+static uint32_t ftgmac100_phyqry(struct eth_device *dev)
+{
+	uint32_t retry, maccr;
+	uint16_t pa, tmp, nego;
+	struct ftgmac100_priv *priv = dev->priv;
+
+	maccr = Speed_100_bit | FULLDUP_bit;
+
+	/* 0. find the phy device  */
+	for (pa = 0; pa < 32; ++pa) {
+		tmp = mdio_read(dev, pa, MII_PHYSID1);
+		if (tmp == 0xFFFF || tmp == 0x0000)
+			continue;
+		break;
 	}
-
-	debug("mdio read timed out\n");
-	return -1;
-}
-
-static int ftgmac100_mdiobus_write(struct eth_device *dev, int phy_addr,
-	int regnum, u16 value)
-{
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
-	int phycr;
-	int data;
-	int i;
-
-	phycr = readl(&ftgmac100->phycr);
-
-	/* preserve MDC cycle threshold */
-	phycr &= FTGMAC100_PHYCR_MDC_CYCTHR_MASK;
-
-	phycr |= FTGMAC100_PHYCR_PHYAD(phy_addr)
-	      |  FTGMAC100_PHYCR_REGAD(regnum)
-	      |  FTGMAC100_PHYCR_MIIWR;
-
-	data = FTGMAC100_PHYDATA_MIIWDATA(value);
-
-	writel(data, &ftgmac100->phydata);
-	writel(phycr, &ftgmac100->phycr);
-
-	for (i = 0; i < 10; i++) {
-		phycr = readl(&ftgmac100->phycr);
-
-		if ((phycr & FTGMAC100_PHYCR_MIIWR) == 0) {
-			debug("(phycr & FTGMAC100_PHYCR_MIIWR) == 0: " \
-				"phy_addr: %x\n", phy_addr);
-			return 0;
-		}
-
-		mdelay(1);
-	}
-
-	debug("mdio write timed out\n");
-	return -1;
-}
-
-int ftgmac100_phy_read(struct eth_device *dev, int addr, int reg, u16 *value)
-{
-	*value = ftgmac100_mdiobus_read(dev , addr, reg);
-
-	if (*value == -1)
-		return -1;
-
-	return 0;
-}
-
-int  ftgmac100_phy_write(struct eth_device *dev, int addr, int reg, u16 value)
-{
-	if (ftgmac100_mdiobus_write(dev, addr, reg, value) == -1)
-		return -1;
-
-	return 0;
-}
-
-static int ftgmac100_phy_reset(struct eth_device *dev)
-{
-	struct ftgmac100_data *priv = dev->priv;
-	int i;
-	u16 status, adv;
-
-	adv = ADVERTISE_CSMA | ADVERTISE_ALL;
-
-	ftgmac100_phy_write(dev, priv->phy_addr, MII_ADVERTISE, adv);
-
-	printf("%s: Starting autonegotiation...\n", dev->name);
-
-	ftgmac100_phy_write(dev, priv->phy_addr,
-		MII_BMCR, (BMCR_ANENABLE | BMCR_ANRESTART));
-
-	for (i = 0; i < 100000 / 100; i++) {
-		ftgmac100_phy_read(dev, priv->phy_addr, MII_BMSR, &status);
-
-		if (status & BMSR_ANEGCOMPLETE)
-			break;
-		mdelay(1);
-	}
-
-	if (status & BMSR_ANEGCOMPLETE) {
-		printf("%s: Autonegotiation complete\n", dev->name);
+	if (pa >= 32) {
+		puts("ftgmac100: phy device not found!\n");
+		return maccr;
 	} else {
-		printf("%s: Autonegotiation timed out (status=0x%04x)\n",
-		       dev->name, status);
-		return 0;
+		priv->phy_addr = pa;
 	}
 
-	return 1;
-}
+	/* 1. check link status */
+	for (retry = 0x300000; retry; --retry) {
+		tmp = mdio_read(dev, priv->phy_addr, MII_BMSR);
+		if (tmp & BMSR_LSTATUS)
+			break;
+	}
+	if (!retry) {
+		priv->lnkup = 0;
+		puts("ftgmac100: link down\n");
+		goto exit;
+	}
+	priv->lnkup = 1;
 
-static int ftgmac100_phy_init(struct eth_device *dev)
-{
-	struct ftgmac100_data *priv = dev->priv;
+	/* 2. check A/N status */
+	for (retry = 0x300000; retry; --retry) {
+		tmp = mdio_read(dev, priv->phy_addr, MII_BMSR);
+		if (tmp & BMSR_ANEGCOMPLETE)
+			break;
+	}
+	if (!retry) {
+		puts("ftgmac100: A/N failed\n");
+		goto exit;
+	}
 
-	int phy_addr;
-	u16 phy_id, status, adv, lpa, stat_ge;
-	int media, speed, duplex;
-	int i;
+	/* 3. build MACCR with the PHY status */
+	maccr = 0;
+	tmp = mdio_read(dev, priv->phy_addr, MII_PHYSID2);
+	priv->phy_id.oui   = (mdio_read(dev, priv->phy_addr, MII_PHYSID1 ) << 6) |(tmp >> 10);
+	priv->phy_id.model = (tmp >> 4) & 0x3F;
+	priv->phy_id.rev   = tmp & 0x0F;
 
-	/* Check if the PHY is up to snuff... */
-	for (phy_addr = 0; phy_addr < CONFIG_PHY_MAX_ADDR; phy_addr++) {
+	/* 3-1. duplex/speed detect */
+	nego  = mdio_read(dev, priv->phy_addr, MII_ADVERTISE);
+	nego &= mdio_read(dev, priv->phy_addr, MII_LPA);
+	if (nego & LPA_100FULL)
+		maccr |= Speed_100_bit | FULLDUP_bit;
+	else if (nego & LPA_100HALF)
+		maccr |= Speed_100_bit | ENRX_IN_HALFTX_bit;
+	else if (nego & LPA_10FULL)
+		maccr |= FULLDUP_bit;
+	else if (nego & LPA_10HALF)
+		maccr |= ENRX_IN_HALFTX_bit;
 
-		ftgmac100_phy_read(dev, phy_addr, MII_PHYSID1, &phy_id);
-
-		/*
-		 * When it is unable to found PHY,
-		 * the interface usually return 0xffff or 0x0000
-		 */
-		if (phy_id != 0xffff && phy_id != 0x0) {
-			printf("%s: found PHY at 0x%02x\n",
-				dev->name, phy_addr);
-			priv->phy_addr = phy_addr;
+	/* 3-2. G-MODE detection routines */
+	switch(priv->phy_id.oui) {
+	case 0x005043:	/* Marvell 88E1111 */
+		tmp = mdio_read(dev, priv->phy_addr, 17);
+		if (!(tmp & (1 << 11))) {
+			printf("ftgmac100: speed & duplex are un-resolved?\n");
 			break;
 		}
-	}
-
-	if (phy_id == 0xffff || phy_id == 0x0) {
-		printf("%s: no PHY present\n", dev->name);
-		return 0;
-	}
-
-	ftgmac100_phy_read(dev, priv->phy_addr, MII_BMSR, &status);
-
-	if (!(status & BMSR_LSTATUS)) {
-		/* Try to re-negotiate if we don't have link already. */
-		ftgmac100_phy_reset(dev);
-
-		for (i = 0; i < 100000 / 100; i++) {
-			ftgmac100_phy_read(dev, priv->phy_addr,
-				MII_BMSR, &status);
-			if (status & BMSR_LSTATUS)
-				break;
-			udelay(100);
+		if (!(tmp & (1 << 10))) {
+			printf("ftgmac100: link down?\n");
+			break;
 		}
+		switch ((tmp >> 14) &0x03) {
+			case 0:	/* 10 Mbps */
+			case 1:	/* 100 Mbps */
+				break;
+			case 2:	/* 1000 Mbps */
+				maccr |= GMODE_bit;
+				break;
+		}
+		if (tmp & (1 << 13)) {	/* full */
+			maccr &= ~ENRX_IN_HALFTX_bit;
+			maccr |= FULLDUP_bit;
+		} else {				/* half */
+			maccr &= ~FULLDUP_bit;
+			maccr |= ENRX_IN_HALFTX_bit;
+		}
+		break;
+
+	default:
+		tmp  = mdio_read(dev, priv->phy_addr, MII_BMSR);
+		if (!(tmp & BMSR_ESTATEN))
+			break;
+		tmp  = mdio_read(dev, priv->phy_addr, MII_ESTATUS);
+		if (tmp & (ESTATUS_1000_TFULL | ESTATUS_1000_THALF)) {
+			uint16_t ctrl1000, stat1000;
+			ctrl1000 = mdio_read(dev, priv->phy_addr, MII_CTRL1000);
+			stat1000 = mdio_read(dev, priv->phy_addr, MII_STAT1000);
+			printf("ftgmac100: gmii detected(0x%04X, 0x%04X)\n", ctrl1000, stat1000);
+			if ((ctrl1000 & ADVERTISE_1000FULL) && (stat1000 & LPA_1000FULL)) {
+				maccr |= GMODE_bit | FULLDUP_bit;
+				maccr &= ~ENRX_IN_HALFTX_bit;
+			} else if ((ctrl1000 & ADVERTISE_1000HALF) && (stat1000 & LPA_1000HALF)) {
+				maccr |= GMODE_bit | ENRX_IN_HALFTX_bit;
+				maccr &= ~FULLDUP_bit;
+			}
+		}
+		break;
 	}
 
-	if (!(status & BMSR_LSTATUS)) {
-		printf("%s: link down\n", dev->name);
-		return 0;
-	}
+exit:
+	printf("ftgmac100: PHY OUI=0x%06X, Model=0x%02X, Rev.=0x%02X\n",
+		priv->phy_id.oui, priv->phy_id.model, priv->phy_id.rev);
 
-#ifdef CONFIG_FTGMAC100_EGIGA
-	/* 1000 Base-T Status Register */
-	ftgmac100_phy_read(dev, priv->phy_addr,
-		MII_STAT1000, &stat_ge);
+	printf("ftgmac100: %d Mbps, %s\n",
+		(maccr & GMODE_bit) ? 1000 : ((maccr & Speed_100_bit) ? 100 : 10),
+		(maccr & FULLDUP_bit) ? "Full" : "half");
 
-	speed = (stat_ge & (LPA_1000FULL | LPA_1000HALF)
-		 ? 1 : 0);
-
-	duplex = ((stat_ge & LPA_1000FULL)
-		 ? 1 : 0);
-
-	if (speed) { /* Speed is 1000 */
-		printf("%s: link up, 1000bps %s-duplex\n",
-			dev->name, duplex ? "full" : "half");
-		return 0;
-	}
-#endif
-
-	ftgmac100_phy_read(dev, priv->phy_addr, MII_ADVERTISE, &adv);
-	ftgmac100_phy_read(dev, priv->phy_addr, MII_LPA, &lpa);
-
-	media = mii_nway_result(lpa & adv);
-	speed = (media & (ADVERTISE_100FULL | ADVERTISE_100HALF) ? 1 : 0);
-	duplex = (media & ADVERTISE_FULL) ? 1 : 0;
-
-	printf("%s: link up, %sMbps %s-duplex\n",
-	       dev->name, speed ? "100" : "10", duplex ? "full" : "half");
-
-	return 1;
+	return maccr;
 }
 
-static int ftgmac100_update_link_speed(struct eth_device *dev)
+static int ftgmac100_reset(struct eth_device *dev)
 {
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
-	struct ftgmac100_data *priv = dev->priv;
+	uint32_t i, tmp, maccr;
+	struct ftgmac100_priv	*priv = dev->priv;
 
-	unsigned short stat_fe;
-	unsigned short stat_ge;
-	unsigned int maccr;
-
-#ifdef CONFIG_FTGMAC100_EGIGA
-	/* 1000 Base-T Status Register */
-	ftgmac100_phy_read(dev, priv->phy_addr, MII_STAT1000, &stat_ge);
-#endif
-
-	ftgmac100_phy_read(dev, priv->phy_addr, MII_BMSR, &stat_fe);
-
-	if (!(stat_fe & BMSR_LSTATUS))	/* link status up? */
-		return 0;
-
-	/* read MAC control register and clear related bits */
-	maccr = readl(&ftgmac100->maccr) &
-		~(FTGMAC100_MACCR_GIGA_MODE |
-		  FTGMAC100_MACCR_FAST_MODE |
-		  FTGMAC100_MACCR_FULLDUP);
-
-#ifdef CONFIG_FTGMAC100_EGIGA
-	if (stat_ge & LPA_1000FULL) {
-		/* set gmac for 1000BaseTX and Full Duplex */
-		maccr |= FTGMAC100_MACCR_GIGA_MODE | FTGMAC100_MACCR_FULLDUP;
+	/*
+	 * 1. MAC reset
+	 */
+	EMAC_REG32(priv, MACCR_REG) = SW_RST_bit;
+	while (1) {
+		tmp = EMAC_REG32(priv, MACCR_REG);
+		if ( !(tmp & SW_RST_bit) )
+			break;
 	}
 
-	if (stat_ge & LPA_1000HALF) {
-		/* set gmac for 1000BaseTX and Half Duplex */
-		maccr |= FTGMAC100_MACCR_GIGA_MODE;
+	/* 1-1. tx ring */
+	for (i = 0; i < CFG_TXDES_NUM; ++i) {
+		priv->tx_descs[i].owner = 0;	/* owned by SW */
 	}
-#endif
+	priv->tx_idx = 0;
 
-	if (stat_fe & BMSR_100FULL) {
-		/* set MII for 100BaseTX and Full Duplex */
-		maccr |= FTGMAC100_MACCR_FAST_MODE | FTGMAC100_MACCR_FULLDUP;
+	/* 1-2. rx ring	*/
+	for (i = 0; i < CFG_RXDES_NUM; ++i) {
+		priv->rx_descs[i].owner = 0;	/* owned by HW */
 	}
+	priv->rx_idx = 0;
 
-	if (stat_fe & BMSR_10FULL) {
-		/* set MII for 10BaseT and Full Duplex */
-		maccr |= FTGMAC100_MACCR_FULLDUP;
-	}
+	/*
+	 * 2. PHY status query
+	 */
+	maccr = ftgmac100_phyqry(dev);
 
-	if (stat_fe & BMSR_100HALF) {
-		/* set MII for 100BaseTX and Half Duplex */
-		maccr |= FTGMAC100_MACCR_FAST_MODE;
-	}
+	/* 3. Fix up the MACCR value */
+	priv->maccr   = maccr | CRC_APD_bit | RCV_ALL_bit | RX_RUNT_bit | RCV_EN_bit | XMT_EN_bit | RDMA_EN_bit | XDMA_EN_bit;
+	priv->irqmask = 0;
 
-	if (stat_fe & BMSR_10HALF) {
-		/* set MII for 10BaseT and Half Duplex */
-		/* we have already clear these bits, do nothing */
-		;
-	}
+	/* 4. MAC address setup */
+	do {
+		uint8_t *ma = dev->enetaddr;
+		EMAC_REG32(priv, MAC_MADR_REG) = ma[1] | (ma[0] << 8);
+		EMAC_REG32(priv, MAC_LADR_REG) = ma[5] | (ma[4] << 8) | (ma[3] << 16) | (ma[2] << 24);
+	} while(0);
 
-	/* update MII config into maccr */
-	writel(maccr, &ftgmac100->maccr);
+	/* 5. MAC registers setup */
+	EMAC_REG32(priv, RXR_BADR_REG) = priv->rx_descs_dma;
+	EMAC_REG32(priv, TXR_BADR_REG) = priv->tx_descs_dma;
+	EMAC_REG32(priv, ITC_REG)      = 0x00001010;
+	EMAC_REG32(priv, APTC_REG)     = 0x00000001;
+	EMAC_REG32(priv, DBLAC_REG)    = 0x00022F72;
+	EMAC_REG32(priv, ISR_REG)      = 0x000007FF;
+	EMAC_REG32(priv, IMR_REG)      = priv->irqmask;
+	EMAC_REG32(priv, MACCR_REG)    = priv->maccr;
 
-	return 1;
+	return 0;
 }
 
-/*
- * Reset MAC
- */
-static void ftgmac100_reset(struct eth_device *dev)
+static int ftgmac100_probe(struct eth_device *dev, bd_t *bis)
 {
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
+	puts("ftgmac100: probe\n");
 
-	debug("%s()\n", __func__);
+	if (ftgmac100_reset(dev))
+		return -1;
 
-	writel(FTGMAC100_MACCR_SW_RST, &ftgmac100->maccr);
-
-	while (readl(&ftgmac100->maccr) & FTGMAC100_MACCR_SW_RST)
-		;
+	return 0;
 }
 
-/*
- * Set MAC address
- */
-static void ftgmac100_set_mac(struct eth_device *dev,
-	const unsigned char *mac)
-{
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
-	unsigned int maddr = mac[0] << 8 | mac[1];
-	unsigned int laddr = mac[2] << 24 | mac[3] << 16 | mac[4] << 8 | mac[5];
-
-	debug("%s(%x %x)\n", __func__, maddr, laddr);
-
-	writel(maddr, &ftgmac100->mac_madr);
-	writel(laddr, &ftgmac100->mac_ladr);
-}
-
-static void ftgmac100_set_mac_from_env(struct eth_device *dev)
-{
-	eth_getenv_enetaddr("ethaddr", dev->enetaddr);
-
-	ftgmac100_set_mac(dev, dev->enetaddr);
-}
-
-/*
- * disable transmitter, receiver
- */
 static void ftgmac100_halt(struct eth_device *dev)
 {
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
+	struct ftgmac100_priv *priv = dev->priv;
 
-	debug("%s()\n", __func__);
+	EMAC_REG32(priv, IMR_REG) = 0;
+	EMAC_REG32(priv, MACCR_REG)	= 0;
 
-	writel(0, &ftgmac100->maccr);
+	puts("ftgmac100: halt\n");
 }
 
-static int ftgmac100_init(struct eth_device *dev, bd_t *bd)
+static int ftgmac100_send(struct eth_device *dev, volatile void *packet, int length)
 {
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
-	struct ftgmac100_data *priv = dev->priv;
-	struct ftgmac100_txdes *txdes = priv->txdes;
-	struct ftgmac100_rxdes *rxdes = priv->rxdes;
-	unsigned int maccr;
-	int i;
+	struct ftgmac100_priv *priv = dev->priv;
+	volatile TX_DESC *cur_desc;
 
-	debug("%s()\n", __func__);
+	if (!priv->lnkup)
+		return 0;
+#if DEBUG_TX
+	printf("ftgmac100: tx@0x%08X, len=%d\n", (uint32_t)packet, length);
+#endif	/* #ifdef DEBUG_TX */
 
-	/* set the ethernet address */
-	ftgmac100_set_mac_from_env(dev);
-
-	/* disable all interrupts */
-	writel(0, &ftgmac100->ier);
-
-	/* initialize descriptors */
-	priv->tx_index = 0;
-	priv->rx_index = 0;
-
-	txdes[PKTBUFSTX - 1].txdes0	= FTGMAC100_TXDES0_EDOTR;
-	rxdes[PKTBUFSRX - 1].rxdes0	= FTGMAC100_RXDES0_EDORR;
-
-	for (i = 0; i < PKTBUFSTX; i++) {
-		/* TXBUF_BADR */
-		txdes[i].txdes3 = 0;
-		txdes[i].txdes1 = 0;
+	if (length <= 0 || length > CFG_XBUF_SIZE) {
+		printf("ftgmac100: bad tx packet length(%d)\n", length);
+		return 0;
 	}
 
-	for (i = 0; i < PKTBUFSRX; i++) {
-		/* RXBUF_BADR */
-		rxdes[i].rxdes3 = (unsigned int)NetRxPackets[i];
-		rxdes[i].rxdes0 &= ~FTGMAC100_RXDES0_RXPKT_RDY;
+	if (length < 64)
+		length = 64;
+
+	cur_desc = &priv->tx_descs[priv->tx_idx];
+	if (cur_desc->owner) {
+		EMAC_REG32(priv, TXPD_REG) = 0xffffffff;	/* kick-off Tx DMA */
+		printf("ftgmac100: out of txd\n");
+		return 0;
 	}
 
-	/* transmit ring */
-	writel((unsigned int)txdes, &ftgmac100->txr_badr);
+	memcpy((void *)cur_desc->vbuf, (void *)packet, length);
+	dma_map_single((void *)cur_desc->vbuf, length, DMA_TO_DEVICE);
 
-	/* receive ring */
-	writel((unsigned int)rxdes, &ftgmac100->rxr_badr);
+	cur_desc->len   = length;
+	cur_desc->lts   = 1;
+	cur_desc->fts   = 1;
+	cur_desc->owner = 1;
 
-	/* poll receive descriptor automatically */
-	writel(FTGMAC100_APTC_RXPOLL_CNT(1), &ftgmac100->aptc);
+	EMAC_REG32(priv, TXPD_REG) = 0xffffffff;	/* kick-off Tx DMA */
 
-	/* config receive buffer size register */
-	writel(FTGMAC100_RBSR_SIZE(RBSR_DEFAULT_VALUE), &ftgmac100->rbsr);
+#if DEBUG_TX
+	printf("ftgmac100: txd[%d]@0x%08X, buf=0x%08X(pa=0x%08X)\n",
+	       priv->tx_idx, (uint32_t)cur_desc,
+	       cur_desc->vbuf, cur_desc->buf);
+#endif
 
-	/* enable transmitter, receiver */
-	maccr = FTGMAC100_MACCR_TXMAC_EN |
-		FTGMAC100_MACCR_RXMAC_EN |
-		FTGMAC100_MACCR_TXDMA_EN |
-		FTGMAC100_MACCR_RXDMA_EN |
-		FTGMAC100_MACCR_CRC_APD |
-		FTGMAC100_MACCR_FULLDUP |
-		FTGMAC100_MACCR_RX_RUNT |
-		FTGMAC100_MACCR_RX_BROADPKT;
+	priv->tx_idx = (priv->tx_idx + 1) % CFG_TXDES_NUM;
 
-	writel(maccr, &ftgmac100->maccr);
-
-	if (!ftgmac100_phy_init(dev)) {
-		if (!ftgmac100_update_link_speed(dev))
-			return -1;
-	}
-
-	return 0;
+	return length;
 }
 
-/*
- * Get a data block via Ethernet
- */
 static int ftgmac100_recv(struct eth_device *dev)
 {
-	struct ftgmac100_data *priv = dev->priv;
-	struct ftgmac100_rxdes *curr_des;
-	unsigned short rxlen;
+	struct ftgmac100_priv *priv = dev->priv;
+	volatile RX_DESC *cur_desc;
+	uint32_t rlen = 0;
 
-	curr_des = &priv->rxdes[priv->rx_index];
+	if (!priv->lnkup)
+		return 0;
 
-	if (!(curr_des->rxdes0 & FTGMAC100_RXDES0_RXPKT_RDY))
-		return -1;
+	do {
+		uint8_t *buf;
+		uint16_t len;
 
-	if (curr_des->rxdes0 & (FTGMAC100_RXDES0_RX_ERR |
-				FTGMAC100_RXDES0_CRC_ERR |
-				FTGMAC100_RXDES0_FTL |
-				FTGMAC100_RXDES0_RUNT |
-				FTGMAC100_RXDES0_RX_ODD_NB)) {
-		return -1;
-	}
+		cur_desc = &priv->rx_descs[priv->rx_idx];
+		if (cur_desc->owner == 0)
+			break;
 
-	rxlen = FTGMAC100_RXDES0_VDBC(curr_des->rxdes0);
+		len = cur_desc->len;
+		buf = (uint8_t *)cur_desc->vbuf;
 
-	debug("%s(): RX buffer %d, %x received\n",
-	       __func__, priv->rx_index, rxlen);
-
-	/* pass the packet up to the protocol layers. */
-	NetReceive((void *)curr_des->rxdes3, rxlen);
-
-	/* release buffer to DMA */
-	curr_des->rxdes0 &= ~FTGMAC100_RXDES0_RXPKT_RDY;
-
-	priv->rx_index = (priv->rx_index + 1) % PKTBUFSRX;
-
-	return 0;
-}
-
-/*
- * Send a data block via Ethernet
- */
-static int ftgmac100_send(struct eth_device *dev, void *packet, int length)
-{
-	struct ftgmac100 *ftgmac100 = (struct ftgmac100 *)dev->iobase;
-	struct ftgmac100_data *priv = dev->priv;
-	struct ftgmac100_txdes *curr_des = &priv->txdes[priv->tx_index];
-	int start;
-
-	if (curr_des->txdes0 & FTGMAC100_TXDES0_TXDMA_OWN) {
-		debug("%s(): no TX descriptor available\n", __func__);
-		return -1;
-	}
-
-	debug("%s(%x, %x)\n", __func__, (int)packet, length);
-
-	length = (length < ETH_ZLEN) ? ETH_ZLEN : length;
-
-	/* initiate a transmit sequence */
-	curr_des->txdes3 = (unsigned int)packet;	/* TXBUF_BADR */
-
-	/* only one descriptor on TXBUF */
-	curr_des->txdes0 &= FTGMAC100_TXDES0_EDOTR;
-	curr_des->txdes0 |= FTGMAC100_TXDES0_FTS |
-			    FTGMAC100_TXDES0_LTS |
-			    FTGMAC100_TXDES0_TXBUF_SIZE(length) |
-			    FTGMAC100_TXDES0_TXDMA_OWN ;
-
-	/* start transmit */
-	writel(1, &ftgmac100->txpd);
-
-	/* wait for transfer to succeed */
-	start = get_timer(0);
-	while (curr_des->txdes0 & FTGMAC100_TXDES0_TXDMA_OWN) {
-		if (get_timer(0) >= 5) {
-			debug("%s(): timed out\n", __func__);
-			return -1;
+		if (cur_desc->error) {
+			printf("ftgmac100: rx error\n");
+		} else {
+#if DEBUG_RX
+			printf("ftgmac100: rx@0x%08X, len=%d\n", (uint32_t)buf, len);
+#endif
+			dma_map_single(buf, len, DMA_FROM_DEVICE);
+			NetReceive(buf, len);
+			rlen += len;
 		}
-	}
 
-	debug("%s(): packet sent\n", __func__);
+		cur_desc->len   = CFG_XBUF_SIZE;
+		cur_desc->owner = 0;	/* owned by hardware */
 
-	priv->tx_index = (priv->tx_index + 1) % PKTBUFSTX;
+		priv->rx_idx = (priv->rx_idx + 1) % CFG_RXDES_NUM;
 
-	return 0;
+	} while(0);
+
+	return rlen;
 }
 
-int ftgmac100_initialize(bd_t *bd)
+#if defined(CONFIG_MII) || defined(CONFIG_CMD_MII)
+
+static int ftgmac100_mii_read (const char *devname, uint8_t addr, uint8_t reg, uint16_t *value)
 {
+	int ret = 0;
 	struct eth_device *dev;
-	struct ftgmac100_data *priv;
 
-	dev = malloc(sizeof *dev);
-	if (!dev) {
-		printf("%s(): failed to allocate dev\n", __func__);
-		goto out;
+	dev = eth_get_dev_by_name(devname);
+	if (dev == NULL) {
+		printf("%s: no such device\n", devname);
+		ret = -1;
+	} else {
+		*value = mdio_read(dev, addr, reg);
 	}
 
-	/* Transmit and receive descriptors should align to 16 bytes */
-	priv = memalign(16, sizeof(struct ftgmac100_data));
-	if (!priv) {
-		printf("%s(): failed to allocate priv\n", __func__);
-		goto free_dev;
+	return ret;
+}
+
+static int ftgmac100_mii_write (const char *devname, uint8_t addr, uint8_t reg, uint16_t value)
+{
+	int ret = 0;
+	struct eth_device *dev;
+
+	dev = eth_get_dev_by_name(devname);
+	if (dev == NULL) {
+		printf("%s: no such device\n", devname);
+		ret = -1;
+	} else {
+		mdio_write(dev, addr, reg, value);
 	}
 
-	memset(dev, 0, sizeof(*dev));
-	memset(priv, 0, sizeof(*priv));
+	return ret;
+}
 
-	sprintf(dev->name, "FTGMAC100");
-	dev->iobase	= CONFIG_FTGMAC100_BASE;
-	dev->init	= ftgmac100_init;
-	dev->halt	= ftgmac100_halt;
-	dev->send	= ftgmac100_send;
-	dev->recv	= ftgmac100_recv;
-	dev->priv	= priv;
+#endif	/* #if defined(CONFIG_MII) || defined(CONFIG_CMD_MII) */
 
-	eth_register(dev);
+int ftgmac100_initialize(bd_t *bis)
+{
+	int i, card_number = 0;
+	char enetvar[32];
+	char *tmp, *end;
+	struct eth_device *dev;
+	struct ftgmac100_priv *priv;
 
-	ftgmac100_reset(dev);
+	dev = (struct eth_device *)malloc(sizeof(struct eth_device) + sizeof(struct ftgmac100_priv));
+	if (dev == NULL) {
+		panic("ftgmac100: out of memory 1\n");
+		return -1;
+	}
+	priv = (struct ftgmac100_priv *)(dev + 1);
+	memset(dev, 0, sizeof(struct eth_device) + sizeof(struct ftgmac100_priv));
 
-	return 1;
+	sprintf(dev->name, "FTGMAC#%d", card_number);
 
-free_dev:
-	free(dev);
-out:
-	return 0;
+	dev->iobase = priv->iobase = CONFIG_FTGMAC100_BASE;
+	printf("ftgmac100: ioaddr = 0x%08x\n", (u32) priv->iobase);
+	dev->priv = priv;
+	dev->init = ftgmac100_probe;
+	dev->halt = ftgmac100_halt;
+	dev->send = ftgmac100_send;
+	dev->recv = ftgmac100_recv;
+
+	sprintf(enetvar, card_number ? "eth%daddr" : "ethaddr", card_number);
+
+	tmp = getenv (enetvar);
+	if (tmp != NULL) {
+		for (i = 0; i < 6; i++) {
+			dev->enetaddr[i] = tmp ? simple_strtoul(tmp, &end, 16) : 0;
+			if (tmp)
+				tmp = (*end) ? end + 1 : end;
+		}
+	} else {
+		memcpy(dev->enetaddr, ftgmac100_mac_addr, 6);
+	}
+
+	/*
+	 * init tx descriptors (it must be 16 bytes aligned)
+	 */
+	priv->tx_descs = dma_alloc_coherent(sizeof(TX_DESC)*CFG_TXDES_NUM, (unsigned long *)&priv->tx_descs_dma);
+	if (priv->tx_descs == NULL)
+		panic("ftgmac100: out of memory 3\n");
+	memset((void *)priv->tx_descs, 0, sizeof(TX_DESC) * CFG_TXDES_NUM);
+	for (i = 0; i < CFG_TXDES_NUM; ++i) {
+		size_t align = 32;
+		uint8_t *va = memalign(align, CFG_XBUF_SIZE);
+		if (va == NULL)
+			panic("ftgmac100: out of memory 4\n");
+		priv->tx_descs[i].vbuf  = (uint32_t)va;
+		priv->tx_descs[i].buf   = virt_to_phys(va);
+		priv->tx_descs[i].len   = 0;
+		priv->tx_descs[i].end   = 0;
+		priv->tx_descs[i].owner = 0;	/* owned by SW */
+	}
+	priv->tx_descs[CFG_TXDES_NUM - 1].end = 1;
+	priv->tx_idx = 0;
+
+	/*
+	 * init rx descriptors
+	 */
+	priv->rx_descs = dma_alloc_coherent(sizeof(RX_DESC)*CFG_RXDES_NUM, (unsigned long *)&priv->rx_descs_dma);
+	if (priv->rx_descs == NULL)
+		panic("ftgmac100: out of memory 4\n");
+	memset((void *)priv->rx_descs, 0, sizeof(RX_DESC) * CFG_RXDES_NUM);
+	for (i = 0; i < CFG_RXDES_NUM; ++i) {
+		size_t align = 32;
+		uint8_t *va = memalign(align, CFG_XBUF_SIZE);
+		if (va == NULL)
+			panic("ftgmac100: out of memory 5\n");
+		priv->rx_descs[i].vbuf  = (uint32_t)va;
+		priv->rx_descs[i].buf   = virt_to_phys(va);
+		priv->rx_descs[i].len   = CFG_XBUF_SIZE;
+		priv->rx_descs[i].end   = 0;
+		priv->rx_descs[i].owner = 0;	/* owned by HW */
+	}
+	priv->rx_descs[CFG_RXDES_NUM - 1].end = 1;
+	priv->rx_idx = 0;
+
+	eth_register (dev);
+
+#if defined(CONFIG_MII) || defined(CONFIG_CMD_MII)
+	miiphy_register (dev->name, ftgmac100_mii_read, ftgmac100_mii_write);
+#endif
+
+#if DEBUG_DESC
+	for (i = 0; i < CFG_TXDES_NUM; ++i) {
+		printf("TXD[%d]: 0x%08X, 0x%08X<=0x%08x\n",
+			i, (uint32_t)&priv->tx_descs[i],
+			(uint32_t)priv->tx_descs[i].vbuf,
+			(uint32_t)priv->tx_descs[i].buf);
+	}
+	for (i = 0; i < CFG_RXDES_NUM; ++i) {
+		printf("RXD[%d]: 0x%08X, 0x%08X<=0x%08X\n",
+			i, (uint32_t)&priv->rx_descs[i],
+			(uint32_t)priv->rx_descs[i].vbuf,
+			(uint32_t)priv->rx_descs[i].buf);
+	}
+#endif
+
+	card_number++;
+
+	return card_number;
 }
