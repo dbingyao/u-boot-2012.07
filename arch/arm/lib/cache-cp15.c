@@ -69,15 +69,24 @@ static inline void mmu_setup(void)
 {
 	u32 *page_table = (u32 *)gd->tlb_addr;
 	int i;
-	u32 reg;
+	u32 reg, ttb;
 
 	arm_init_before_mmu();
-	/* Set up an identity-mapping for all 4GB, rw for everyone */
-	for (i = 0; i < 4096; i++)
-		page_table[i] = i << 20 | (3 << 10) | 0x12;
 
-	for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
-		dram_bank_mmu_setup(i);
+	/* Read the page table address to cp15 */
+	asm volatile("mrc p15, 0, %0, c2, c0, 0"
+		     :"=r"(ttb) :  : "memory");
+
+	if (ttb != page_table) {
+
+		/* Set up an identity-mapping for all 4GB, rw for everyone */
+		for (i = 0; i < 4096; i++)
+			page_table[i] = i << 20 | (3 << 10) | 0x12;
+
+		for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
+			dram_bank_mmu_setup(i);
+		}
+
 	}
 
 	/* Copy the page table address to cp15 */
@@ -86,6 +95,7 @@ static inline void mmu_setup(void)
 	/* Set the access control to all-supervisor */
 	asm volatile("mcr p15, 0, %0, c3, c0, 0"
 		     : : "r" (~0));
+
 	/* and enable the mmu */
 	reg = get_cr();	/* get control reg. */
 	cp_delay();
