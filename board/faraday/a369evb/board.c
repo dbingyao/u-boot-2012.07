@@ -93,3 +93,13 @@ int board_nand_init(struct nand_chip *chip)
 
 	return ftnandc021_probe(chip);
 }
+
+extern int ftsdc010_mmc_init(int dev_index);
+int board_mmc_init(bd_t *bis)
+{
+	/* Clock Setup: SD = 133MHz, SSP = APB (SPI mode) */
+	REG32(CONFIG_SCU_BASE + 0x22C) = 0x000A0A0A;
+
+	ftsdc010_mmc_init(0);
+	return 0;
+}

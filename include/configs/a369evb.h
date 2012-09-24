@@ -34,7 +34,7 @@
  * CPU
  */
 #define CONFIG_DISPLAY_CPUINFO
-#define CONFIG_SYS_DCACHE_OFF
+#undef CONFIG_SYS_DCACHE_OFF
 
 /*
  * Linux kernel tagged list
@@ -171,6 +171,18 @@
 #define CONFIG_DRIVER_ETHER
 #define CONFIG_CMD_PING
 
+/*                                                                                                                             * FAT (USB & MMC)                                                                                                             */
+#define CONFIG_DOS_PARTITION
+#define CONFIG_CMD_FAT
+
+/*
+ * MMC(SD) card
+ */
+#define CONFIG_GENERIC_MMC
+#define CONFIG_FTSDC010
+#define CONFIG_CMD_MMC
+#define CONFIG_MMC
+
 /*
  * FLASH and environment organization
  */
@@ -179,6 +191,18 @@
  */
 #undef CONFIG_CMD_IMLS
 #define CONFIG_SYS_NO_FLASH
+
+#ifndef CONFIG_SYS_NO_FLASH
+#define CONFIG_SYS_FLASH_CFI_WIDTH	FLASH_CFI_16BIT
+#define CONFIG_SYS_FLASH_BASE    	0x20000000
+#define PHYS_FLASH_SIZE  		SZ_64M
+#define CONFIG_SYS_FLASH_CFI
+#define CONFIG_FLASH_CFI_DRIVER
+#define CONFIG_SYS_MAX_FLASH_BANKS	1
+#define CONFIG_SYS_MAX_FLASH_SECT	1024	/* max. sector number */
+#define CFG_FLASH_EMPTY_INFO	/* print 'E' for empty sector on flinfo */
+#define CONFIG_CMD_FLASH
+#endif  /* !CONFIG_SYS_NO_FLASH */
 
 /*
  * NAND Flash

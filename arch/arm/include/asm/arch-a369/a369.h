@@ -39,5 +39,7 @@
 #define CONFIG_FTWDT010_BASE	0x92200000	/* Watchdog */
 #define CONFIG_FTGMAC100_BASE	0x90C00000	/* Ethernet Controller */
 #define CONFIG_FTNANDC021_BASE	0x90200000	/* Nand Controller */
+#define CONFIG_FTSDC010_BASE	0x90500000	/* SDC Controller */
+
 
 #endif	/* __A369_H */
