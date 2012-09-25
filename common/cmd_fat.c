@@ -44,9 +44,9 @@ int do_fat_fsload (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 	int part=1;
 	char *ep;
 
-	if (argc < 5) {
+	if (argc < 4) {
 		printf( "usage: fatload <interface> <dev[:part]> "
-			"<addr> <filename> [bytes]\n");
+			"<filename> [addr] [bytes]\n");
 		return 1;
 	}
 
@@ -68,12 +68,24 @@ int do_fat_fsload (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 			argv[1], dev, part);
 		return 1;
 	}
-	offset = simple_strtoul(argv[3], NULL, 16);
+
+	if (argc > 4)
+		offset = simple_strtoul(argv[4], NULL, 16);
+	else
+#ifdef	CONFIG_SYS_LOAD_ADDR
+		offset = CONFIG_SYS_LOAD_ADDR;
+#else
+	{
+		printf("\n** Unknown address to load binary file **\n");
+		printf("\n** Please define CONFIG_SYS_LOAD_ADDR **\n");
+		return 1;
+	}
+#endif
 	if (argc == 6)
 		count = simple_strtoul(argv[5], NULL, 16);
 	else
 		count = 0;
-	size = file_fat_read(argv[4], (unsigned char *)offset, count);
+	size = file_fat_read(argv[3], (unsigned char *)offset, count);
 
 	if(size==-1) {
 		printf("\n** Unable to read \"%s\" from %s %d:%d **\n",
@@ -81,7 +93,7 @@ int do_fat_fsload (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 		return 1;
 	}
 
-	printf("\n%ld bytes read\n", size);
+	printf("\n%ld bytes read to addr 0x%08lx\n", size, offset);
 
 	sprintf(buf, "%lX", size);
 	setenv("filesize", buf);
@@ -93,9 +105,10 @@ int do_fat_fsload (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
 U_BOOT_CMD(
 	fatload,	6,	0,	do_fat_fsload,
 	"load binary file from a dos filesystem",
-	"<interface> <dev[:part]>  <addr> <filename> [bytes]\n"
+	"<interface> <dev[:part]>  <filename> [addr] [bytes]\n"
 	"    - load binary file 'filename' from 'dev' on 'interface'\n"
-	"      to address 'addr' from dos filesystem"
+	"      to address 'addr' from dos filesystem\n"
+	"    - If address 'addr' not specified, load to CONFIG_SYS_LOAD_ADDR\n"
 );
 
 int do_fat_ls (cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
