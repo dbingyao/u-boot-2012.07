@@ -103,6 +103,7 @@
 #define CONFIG_ENV_SIZE 		0x20000
 #define CONFIG_CMD_SAVEENV
 
+
 /*
  * Warning: changing CONFIG_SYS_TEXT_BASE requires
  * adapting the initial boot program.                                                                                          * Since the linker has to swallow that define, we must use a pure
@@ -176,6 +177,11 @@
 #define CONFIG_DRIVER_ETHER
 #define CONFIG_CMD_PING
 
+/*
+ * Boot argument for uImage to pass into Linux kernel after start up
+ */
+#define CONFIG_BOOTARGS 	"mem=512M console=ttyS0,38400 root=/dev/mmcblk0p5 rw rootfstype=ext4 rootwait"
+
 /*                                                                                                                             * FAT (USB & MMC)                                                                                                             */
 #define CONFIG_DOS_PARTITION
 #define CONFIG_CMD_FAT
@@ -187,6 +193,11 @@
 #define CONFIG_FTSDC010
 #define CONFIG_CMD_MMC
 #define CONFIG_MMC
+
+/*
+ * Boot from SD card Command with "uImage"
+ */
+#define CONFIG_BOOTCOMMAND	"mmcinfo; fatload mmc 0 uImage; bootm"
 
 /*
  * FLASH and environment organization
