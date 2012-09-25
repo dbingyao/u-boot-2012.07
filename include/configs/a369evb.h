@@ -34,7 +34,12 @@
  * CPU
  */
 #define CONFIG_DISPLAY_CPUINFO
-#undef CONFIG_SYS_DCACHE_OFF
+#undef CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
+
+/* Uncache controller register base area */
+#ifndef CONFIG_SYS_DCACHE_OFF
+#define CONFIG_ARCH_EARLY_INIT_R
+#endif
 
 /*
  * Linux kernel tagged list

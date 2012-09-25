@@ -26,6 +26,18 @@
 #include <asm/system.h>
 
 
+#ifdef CONFIG_ARCH_EARLY_INIT_R
+unsigned int io_table[] = { CONFIG_FTUART010_BASE,
+			    CONFIG_FTPWMTMR010_BASE,
+			    CONFIG_SCU_BASE,
+			    CONFIG_FTWDT010_BASE,
+			    CONFIG_FTGMAC100_BASE,
+			    CONFIG_FTNANDC021_BASE,
+			    CONFIG_FTSDC010_BASE };
+
+#define NUM_IOS (sizeof(io_table)/sizeof(unsigned int))
+#endif
+
 static inline unsigned int get_line_size(void)
 {
 	unsigned int val;
@@ -181,3 +193,28 @@ int print_cpuinfo(void)
 	return 0;
 }
 #endif	/* #ifdef CONFIG_DISPLAY_CPUINFO */
+
+#ifdef CONFIG_ARCH_EARLY_INIT_R
+int arch_early_init_r(void)
+{
+	DECLARE_GLOBAL_DATA_PTR;
+	int i;
+	u32 *page_table = (u32 *)gd->tlb_addr;
+	u32 ca_start, ca_end;
+
+	dcache_disable();
+	asm volatile ("mov r3,#0\n"
+		      "mcr p15, 0, r3, c8, c6, 0\n"  /* invalidate DTLB all */
+		      : : : "r3");
+	ca_start = (0x90200000 >> 20);
+	ca_end = ca_start + 32;
+
+	printf("Uncaching controller register memory region ...\n");
+	for ( i=0; i < NUM_IOS ; i ++) {
+
+		ca_start = (io_table[i] >> 20);
+		page_table[ca_start] &= ~0xC;
+	}
+	dcache_enable();
+}
+#endif
