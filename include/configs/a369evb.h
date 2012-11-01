@@ -198,6 +198,7 @@
  * Boot from SD card Command with "uImage"
  */
 #define CONFIG_BOOTCOMMAND	"mmcinfo; fatload mmc 0 uImage; bootm"
+#define CONFIG_BOOTDELAY	3
 
 /*
  * FLASH and environment organization
