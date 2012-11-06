@@ -40,6 +40,8 @@
 #define CONFIG_FTGMAC100_BASE	0x90C00000	/* Ethernet Controller */
 #define CONFIG_FTNANDC021_BASE	0x90200000	/* Nand Controller */
 #define CONFIG_FTSDC010_BASE	0x90500000	/* SDC Controller */
-
+#define CONFIG_FTDDRII030_BASE	0x93100000	/* DDR2 Controller */
+#define CONFIG_FTAHBC0_BASE	0x94000000	/* AHBC_0 Controller */
+#define CONFIG_FTAHBC1_BASE	0x94100000	/* AHBC_1 Controller */
 
 #endif	/* __A369_H */

@@ -29,6 +29,17 @@ int board_init(void)
 	return 0;
 }
 
+#if defined(PHYS_SDRAM_2) && defined (PHYS_SDRAM_2_SIZE)
+void dram_init_banksize(void)
+{
+	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
+	gd->bd->bi_dram[0].size =  gd->ram_size;
+
+	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
+	gd->bd->bi_dram[1].size = PHYS_SDRAM_2_SIZE;
+}
+#endif
+
 int dram_init(void)
 {
 	gd->ram_size = CONFIG_SYS_SDRAM_SIZE;

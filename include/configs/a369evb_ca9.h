@@ -54,7 +54,6 @@
  */
 #undef CONFIG_USE_IRQ		/* we don't need IRQ/FIQ stuff */
 
-#define CONFIG_SKIP_LOWLEVEL_INIT /* DDR already init by bootcode2 on board */
 
 /*
  * Timer
@@ -103,6 +102,8 @@
 #define CONFIG_ENV_SIZE 		0x20000
 #define CONFIG_CMD_SAVEENV
 
+/* Init DDR on A369 board from zynq board(SoC) */
+#undef CONFIG_SKIP_LOWLEVEL_INIT
 
 /*
  * Warning: changing CONFIG_SYS_TEXT_BASE requires
@@ -111,19 +112,31 @@
  */
 #define CONFIG_SYS_TEXT_BASE        0x00800000
 
-#define CONFIG_NR_DRAM_BANKS        1
-#define CONFIG_SYS_SDRAM_BASE       0x00000000
-#define CONFIG_SYS_SDRAM_SIZE       SZ_512M
+#define PHYS_SDRAM_1		0x00000000
+#define PHYS_SDRAM_1_SIZE	SZ_256M
 
-#define CONFIG_SYS_MEMTEST_START    (CONFIG_SYS_SDRAM_BASE + SZ_16M)
-#define CONFIG_SYS_MEMTEST_END      (CONFIG_SYS_SDRAM_BASE + SZ_32M)
+#ifdef CONFIG_SKIP_LOWLEVEL_INIT
+#define CONFIG_NR_DRAM_BANKS	1
+#else
+#define CONFIG_NR_DRAM_BANKS	2
+#define PHYS_SDRAM_2		0xA0000000
+#define PHYS_SDRAM_2_SIZE	SZ_256M
+#endif
 
+#define CONFIG_SYS_SDRAM_BASE       PHYS_SDRAM_1
+#define CONFIG_SYS_SDRAM_SIZE       PHYS_SDRAM_1_SIZE
+#define CONFIG_SYS_INIT_RAM_SIZE    SZ_4K
 /*
  * Initial stack pointer: 4k - GENERATED_GBL_DATA_SIZE in internal SRAM,
  * leaving the correct space for initial global data structure above
  * that address while providing maximum stack area below.
  */
-#define CONFIG_SYS_INIT_SP_ADDR     (CONFIG_SYS_SDRAM_BASE + SZ_4K - GENERATED_GBL_DATA_SIZE)
+#define CONFIG_SYS_INIT_SP_ADDR     (CONFIG_SYS_SDRAM_BASE + \
+				     CONFIG_SYS_INIT_RAM_SIZE - \
+				     GENERATED_GBL_DATA_SIZE)
+
+#define CONFIG_SYS_MEMTEST_START    (CONFIG_SYS_SDRAM_BASE + SZ_16M)
+#define CONFIG_SYS_MEMTEST_END      (CONFIG_SYS_SDRAM_BASE + SZ_32M)
 
 /*
  * Default memory address to load image from NAND, flash, SD card, ..., etc
