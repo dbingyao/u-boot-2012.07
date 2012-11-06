@@ -69,7 +69,7 @@ static inline void mmu_setup(void)
 {
 	u32 *page_table = (u32 *)gd->tlb_addr;
 	int i;
-	u32 reg, ttb;
+	u32 reg, ttb, nr_dram_banks;
 
 	arm_init_before_mmu();
 
@@ -81,9 +81,18 @@ static inline void mmu_setup(void)
 
 		/* Set up an identity-mapping for all 4GB, rw for everyone */
 		for (i = 0; i < 4096; i++)
-			page_table[i] = i << 20 | (3 << 10) | 0x12;
+			page_table[i] = i << 20 | (3 << 10) | 0x2;
 
-		for (i = 0; i < CONFIG_NR_DRAM_BANKS; i++) {
+/**
+ * Because we use Bank #1 for IO devices, do not make it
+ * cachable.
+ */
+#if defined(PHYS_SDRAM_2) && defined (PHYS_SDRAM_2_SIZE)
+		nr_dram_banks = 1;
+#else
+		nr_dram_banks = CONFIG_NR_DRAM_BANKS;
+#endif
+		for (i = 0; i < nr_dram_banks; i++) {
 			dram_bank_mmu_setup(i);
 		}
 

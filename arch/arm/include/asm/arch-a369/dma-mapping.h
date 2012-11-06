@@ -25,10 +25,16 @@ enum dma_data_direction {
 	DMA_FROM_DEVICE		= 2,
 };
 
+/**
+ * Bing-Yao:
+ * Do not bother to do dcache related operation if we have
+ * 2 Banks of memory. Bank #1 is uncachable and unbufferable.
+ */
 static void *dma_alloc_coherent(size_t len, unsigned long *handle)
 {
 	*handle = (unsigned long)memalign(64, len);
 
+#if !defined(PHYS_SDRAM_2) && !defined (PHYS_SDRAM_2_SIZE)
 #ifndef CONFIG_SYS_DCACHE_OFF
 {
 	DECLARE_GLOBAL_DATA_PTR;
@@ -48,12 +54,14 @@ static void *dma_alloc_coherent(size_t len, unsigned long *handle)
 	dcache_enable();
 }
 #endif
+#endif
 	return (void *)*handle;
 }
 
 static inline unsigned long dma_map_single(volatile void *vaddr, size_t len,
 					   enum dma_data_direction dir)
 {
+#if !defined(PHYS_SDRAM_2) && !defined (PHYS_SDRAM_2_SIZE)
 #ifndef CONFIG_SYS_DCACHE_OFF
 	switch(dir) {
 	case DMA_BIDIRECTIONAL:
@@ -64,6 +72,7 @@ static inline unsigned long dma_map_single(volatile void *vaddr, size_t len,
 		invalidate_dcache_range((unsigned long)vaddr, (unsigned long)vaddr + len);
 		break;
 	}
+#endif
 #endif
 	return (unsigned long)vaddr;
 }

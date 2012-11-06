@@ -34,7 +34,7 @@
  * CPU
  */
 #define CONFIG_DISPLAY_CPUINFO
-#define CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
+#undef CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
 
 /* Uncache controller register base area */
 #ifndef CONFIG_SYS_DCACHE_OFF
@@ -115,10 +115,9 @@
 #define PHYS_SDRAM_1		0x00000000
 #define PHYS_SDRAM_1_SIZE	SZ_256M
 
-#ifdef CONFIG_SKIP_LOWLEVEL_INIT
-#define CONFIG_NR_DRAM_BANKS	1
-#else
 #define CONFIG_NR_DRAM_BANKS	2
+
+#if (CONFIG_NR_DRAM_BANKS == 2)
 #define PHYS_SDRAM_2		0xA0000000
 #define PHYS_SDRAM_2_SIZE	SZ_256M
 #endif
