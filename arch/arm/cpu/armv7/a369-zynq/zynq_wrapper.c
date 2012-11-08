@@ -1,5 +1,6 @@
+
 /*
- * (C) Copyright 2009 Faraday Technology
+ * (C) Copyright 2012 Faraday Technology
  * Bing-Yao Luo <bjluo@faraday-tech.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -17,28 +18,23 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <common.h>
-#include <asm/arch/a369.h>
+#include <asm/io.h>
+/* Common IO for xgmac and xnand */
+/* Data Memory Barrier */
+#define dmb() __asm__ __volatile__ ("dmb" : : : "memory")
+#define SYNCHRONIZE_IO dmb()
 
-#define FTWDT010_OFFSET_WDLOAD		0x4
-#define FTWDT010_OFFSET_WDRESTART	0x8
-#define FTWDT010_OFFSET_WDCONTROL	0xC
+void XIo_Out32(u32 OutAddress, u32 Value)
+{
+        *(volatile u32 *) OutAddress = Value;
+        SYNCHRONIZE_IO;
+}
 
-.global reset_cpu
-reset_cpu:
-	ldr	r0, =CONFIG_FTWDT010_BASE
+u32 XIo_In32(u32 InAddress)
+{
+        volatile u32 temp = *(volatile u32 *)InAddress;
+        SYNCHRONIZE_IO;
+        return temp;
+}       
 
-	ldr	r1, =0
-	str	r1, [r0, #FTWDT010_OFFSET_WDCONTROL]
-
-	ldr	r1, =0x1000
-	str	r1, [r0, #FTWDT010_OFFSET_WDLOAD]
-
-	ldr	r1, =0x3
-	str	r1, [r0, #FTWDT010_OFFSET_WDCONTROL]
-
-	ldr	r1, =0x5AB9
-	str	r1, [r0, #FTWDT010_OFFSET_WDRESTART]
-
-	mov	pc, lr
 

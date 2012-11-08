@@ -245,4 +245,15 @@
 #define CONFIG_MTD_NAND_VERIFY_WRITE
 #define CONFIG_CMD_NAND
 
+/*
+ * SPI on zynq board Settings
+ */
+#define CONFIG_ZYNQ_SPI
+#define CONFIG_CMD_SPI
+#define CONFIG_SF_DEFAULT_SPEED 30000000
+#define CONFIG_SPI_FLASH
+#define CONFIG_CMD_SF
+#define CONFIG_SPI_FLASH_STMICRO
+#define CONFIG_SPI_FLASH_SPANSION
+
 #endif	/* __CONFIG_H */
