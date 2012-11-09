@@ -34,12 +34,20 @@
 #include "spi_flash_internal.h"
 
 /* M25Pxx-specific commands */
+#define CMD_M25PXX_WREN		0x06	/* Write Enable */
+#define CMD_M25PXX_WRDI		0x04	/* Write Disable */
+#define CMD_M25PXX_RDSR		0x05	/* Read Status Register */
+#define CMD_M25PXX_WRSR		0x01	/* Write Status Register */
+#define CMD_M25PXX_READ		0x03	/* Read Data Bytes */
+#define CMD_M25PXX_FAST_READ	0x0b	/* Read Data Bytes at Higher Speed */
+#define CMD_M25PXX_PP		0x02	/* Page Program */
 #define CMD_M25PXX_SE		0xd8	/* Sector Erase */
 #define CMD_M25PXX_BE		0xc7	/* Bulk Erase */
+#define CMD_M25PXX_DP		0xb9	/* Deep Power-down */
 #define CMD_M25PXX_RES		0xab	/* Release from DP, and Read Signature */
 
 struct stmicro_spi_flash_params {
-	u8 idcode1;
+	u16 idcode1;
 	u16 page_size;
 	u16 pages_per_sector;
 	u16 nr_sectors;
@@ -97,11 +105,25 @@ static const struct stmicro_spi_flash_params stmicro_spi_flash_table[] = {
 		.name = "M25P80",
 	},
 	{
-		.idcode1 = 0x18,
+		.idcode1 = 0x2018,
 		.page_size = 256,
 		.pages_per_sector = 1024,
 		.nr_sectors = 64,
 		.name = "M25P128",
+	},
+	{
+		.idcode1 = 0xBB18,
+		.page_size = 256,
+		.pages_per_sector = 256,
+		.nr_sectors = 256,
+		.name = "N25Q128_1.8V",
+	},
+	{
+		.idcode1 = 0xBA18,
+		.page_size = 256,
+		.pages_per_sector = 256,
+		.nr_sectors = 256,
+		.name = "N25Q128_3V",
 	},
 };
 
@@ -131,13 +153,13 @@ struct spi_flash *spi_flash_probe_stmicro(struct spi_slave *spi, u8 * idcode)
 
 	for (i = 0; i < ARRAY_SIZE(stmicro_spi_flash_table); i++) {
 		params = &stmicro_spi_flash_table[i];
-		if (params->idcode1 == idcode[2]) {
+		if (params->idcode1 == ((idcode[1] << 8) | idcode[2]))
 			break;
-		}
 	}
 
 	if (i == ARRAY_SIZE(stmicro_spi_flash_table)) {
-		debug("SF: Unsupported STMicro ID %02x\n", idcode[1]);
+		debug("SF: Unsupported STMicro ID %02x %02x\n",
+				idcode[1], idcode[2]);
 		return NULL;
 	}
 
@@ -155,7 +177,15 @@ struct spi_flash *spi_flash_probe_stmicro(struct spi_slave *spi, u8 * idcode)
 	flash->read = spi_flash_cmd_read_fast;
 	flash->page_size = params->page_size;
 	flash->sector_size = params->page_size * params->pages_per_sector;
-	flash->size = flash->sector_size * params->nr_sectors;
+
+	/* address width is 4 for dual and 3 for single qspi */
+	if (flash->spi->is_dual == 1) {
+		flash->addr_width = 4;
+		flash->size = flash->sector_size * (2 * params->nr_sectors);
+	} else if (flash->spi->is_dual == 0) {
+		flash->addr_width = 3;
+		flash->size = flash->sector_size * params->nr_sectors;
+	}
 
 	return flash;
 }

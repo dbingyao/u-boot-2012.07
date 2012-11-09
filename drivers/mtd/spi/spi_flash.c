@@ -331,7 +331,7 @@ struct spi_flash *spi_flash_probe(unsigned int bus, unsigned int cs,
 	if (ret)
 		goto err_read_id;
 
-#ifdef DEBUG
+#if 1//def DEBUG
 	printf("SF: Got idcodes\n");
 	print_buffer(0, idcode, 1, sizeof(idcode), 0);
 #endif
