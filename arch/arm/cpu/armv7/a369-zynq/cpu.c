@@ -54,17 +54,13 @@ void enable_caches(void)
 #if !defined(CONFIG_SYS_DCACHE_OFF)
 	dcache_enable();
 #else
-#ifdef CONFIG_SKIP_LOWLEVEL_INIT
 	dcache_disable();
-#endif
 #endif
 
 #if !defined(CONFIG_SYS_ICACHE_OFF)
 	icache_enable();
 #else
-#ifdef CONFIG_SKIP_LOWLEVEL_INIT
 	icache_disable();
-#endif
 #endif
 	printf ("Data (writethrough) Cache is %s\n",
 		dcache_status() ? "ON" : "OFF");
@@ -137,26 +133,25 @@ int print_cpuinfo(void)
 #endif	/* #ifdef CONFIG_DISPLAY_CPUINFO */
 
 #ifdef CONFIG_ARCH_EARLY_INIT_R
+#if !defined(CONFIG_SYS_DCACHE_OFF)
 int arch_early_init_r(void)
 {
 	DECLARE_GLOBAL_DATA_PTR;
 	int i;
 	u32 *page_table = (u32 *)gd->tlb_addr;
-	u32 ca_start, ca_end;
+	u32 ca;
 
 	dcache_disable();
 	asm volatile ("mov r3,#0\n"
 		      "mcr p15, 0, r3, c8, c6, 0\n"  /* invalidate DTLB all */
 		      : : : "r3");
-	ca_start = (0x90200000 >> 20);
-	ca_end = ca_start + 32;
-
 	printf("Uncaching controller register memory region ...\n");
 	for ( i=0; i < NUM_IOS ; i ++) {
 
-		ca_start = (io_table[i] >> 20);
-		page_table[ca_start] &= ~0xC;
+		ca = (io_table[i] >> 20);
+		page_table[ca] &= ~0xC;
 	}
 	dcache_enable();
 }
+#endif
 #endif
