@@ -19,12 +19,42 @@
 
 #include <common.h>
 #include <nand.h>
+#include <zynqpl.h>
+
+#include <asm/arch/xparameters_ps.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
+extern void XIo_Out32(u32 OutAddress, u32 Value);
+
+#ifdef CONFIG_FPGA
+Xilinx_desc fpga = XILINX_XC7Z020_DESC(0);
+#endif
+
 int board_init(void)
 {
-	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
+	/* temporary hack to clear pending irqs before Linux as it 
+	   will hang Linux */
+
+	XIo_Out32(0xe0001014, 0x26d);
+
+	/* temporary hack to take USB out of reset til the is fixed
+	   in Linux */
+
+	XIo_Out32(0xe000a204, 0x80);
+	XIo_Out32(0xe000a208, 0x80);
+	XIo_Out32(0xe000a040, 0x80);
+	XIo_Out32(0xe000a040, 0x00);
+	XIo_Out32(0xe000a040, 0x80);
+
+	icache_enable();
+
+#ifdef CONFIG_FPGA
+	fpga_init();
+	fpga_add(fpga_xilinx, &fpga);
+#endif
+
+	gd->bd->bi_boot_params = PHYS_SDRAM_1 + 0x100;
 
 	return 0;
 }

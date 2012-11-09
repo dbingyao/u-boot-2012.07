@@ -19,6 +19,65 @@
 
 #include <config.h>
 #include <asm/arch/a369.h>
+#include <asm/arch/xparameters_ps.h>
+
+	.macro	zynq_setup
+
+	# unlock SLCR
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 8)
+	ldr r2, =0xDF0D
+	str r2, [r1]
+
+	# remap DDR to zero
+	# FILTERSTART
+	ldr r1, =(XPSS_SCU_BASEADDR + 0x40)
+	ldr r2, =0
+	str r2, [r1]
+
+	# Device config APB
+	# unlock the PCAP
+	ldr r1, =(XPSS_DEV_CFG_APB_BASEADDR + 0x34)
+	ldr r2, =0x757BDF0D
+	str r2, [r1]
+	ldr r1, =(XPSS_DEV_CFG_APB_BASEADDR + 0x28)
+	ldr r2, =0xFFFFFFFF
+	str r2, [r1]
+
+	# OCM_CFG
+	# Mask out the ROM
+	# map ram into upper addresses
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR +0x910)
+	ldr r2, =0x1F
+	str r2, [r1]
+	
+	# FPGA_RST_CTRL
+	# clear resets on AXI fabric ports
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x240)
+	ldr r2, =0x0
+	str r2, [r1]
+
+	# TZ_DDR_RAM
+	# Set DDR trust zone non-secure
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x430)
+	ldr r2, =0xFFFFFFFF
+	str r2, [r1]
+
+	# set urgent bits with register
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x61C)
+	ldr r2, =0
+	str r2, [r1]
+
+	# urgent write, ports S2/S3
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x600)
+	ldr r2, =0xC
+	str r2, [r1]
+
+	# relock SLCR
+	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x4)
+	ldr r2, =0x767B
+	str r2, [r1]
+
+	.endm
 
 	.macro	ddr2_setup
 
@@ -50,6 +109,8 @@ ddr2_wait:
 
 .globl lowlevel_init
 lowlevel_init:
+	zynq_setup
+
 	ldr	r0, =CONFIG_FTDDRII030_BASE
 	ldr	r1, [r0, #0x04]
 	teq	r1, #0x100

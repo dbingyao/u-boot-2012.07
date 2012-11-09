@@ -245,6 +245,13 @@
 #define CONFIG_MTD_NAND_VERIFY_WRITE
 #define CONFIG_CMD_NAND
 
+/* Enable the PL to be downloaded */
+
+#define CONFIG_FPGA
+#define CONFIG_FPGA_XILINX
+#define CONFIG_FPGA_ZYNQPL
+#define CONFIG_CMD_FPGA
+
 /*
  * SPI on zynq board Settings
  */
