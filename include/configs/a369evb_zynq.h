@@ -29,12 +29,13 @@
  */
 #define MACH_TYPE_FARADAY	758
 #define CONFIG_MACH_TYPE	MACH_TYPE_FARADAY
+#define CONFIG_SOC_ZYNQ
 
 /*
  * CPU
  */
 #define CONFIG_DISPLAY_CPUINFO
-#undef CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
+#define CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
 
 /* Uncache controller register base area */
 #ifndef CONFIG_SYS_DCACHE_OFF
@@ -262,5 +263,13 @@
 #define CONFIG_CMD_SF
 #define CONFIG_SPI_FLASH_STMICRO
 #define CONFIG_SPI_FLASH_SPANSION
+
+#define CONFIG_CMD_IRQ
+#define CONFIG_USE_IRQ
+
+#ifdef CONFIG_USE_IRQ
+#define CONFIG_STACKSIZE_IRQ     SZ_4K
+#define CONFIG_STACKSIZE_FIQ     SZ_4K
+#endif
 
 #endif	/* __CONFIG_H */

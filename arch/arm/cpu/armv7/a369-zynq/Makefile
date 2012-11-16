@@ -26,7 +26,7 @@ include $(TOPDIR)/config.mk
 LIB	= $(obj)lib$(SOC).o
 
 SOBJS	+= reset.o
-COBJS	+= cpu.o zynq_wrapper.o
+COBJS	+= cpu.o zynq_wrapper.o interrupts.o
 
 SRCS	:= $(START:.o=.S) $(SOBJS:.o=.S) $(COBJS:.o=.c)
 OBJS	:= $(addprefix $(obj),$(COBJS) $(SOBJS))
