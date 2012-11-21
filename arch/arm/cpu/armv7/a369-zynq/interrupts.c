@@ -23,6 +23,7 @@
 #include <asm/arch/a369.h>
 #include <asm/arch/interrupts.h>
 #include <asm/proc-armv/ptrace.h>
+#include <asm/arch/xparameters_ps.h>
 
 #ifdef CONFIG_USE_IRQ
 
@@ -34,24 +35,6 @@ struct _irq_handler {
 static struct _irq_handler IRQ_HANDLER[NR_IRQS];
 
 #ifdef CONFIG_SOC_ZYNQ
-
-#define	GIC_DIST_BASE	0xF8F01000
-#define GIC_CPU_BASE	0xF8F00100
-
-#define GIC_CPU_CTRL			0x00
-#define GIC_CPU_PRIMASK			0x04
-
-#define GIC_DIST_CTRL			0x000
-#define GIC_DIST_CTR			0x004
-#define GIC_DIST_ENABLE_SET		0x100
-#define GIC_DIST_ENABLE_CLEAR		0x180
-#define GIC_DIST_PENDING_SET		0x200
-#define GIC_DIST_PENDING_CLEAR		0x280
-#define GIC_DIST_ACTIVE_BIT		0x300
-#define GIC_DIST_PRI			0x400
-#define GIC_DIST_TARGET			0x800
-#define GIC_DIST_CONFIG			0xc00
-#define GIC_DIST_SOFTINT		0xf00
 
 #define GIC_CPU_REG32(off)	*(volatile unsigned long *)(GIC_CPU_BASE + off)
 #define GIC_DIST_REG32(off)	*(volatile unsigned long *)(GIC_DIST_BASE + off)
@@ -98,11 +81,11 @@ static void gic_cpu_init(void)
 	int i;
 
 	/*
-	 * Deal with the banked PPI and SGI interrupts - disable all
-	 * PPI interrupts, ensure all SGI interrupts are enabled.
+	 * Do not deal with the banked PPI and SGI interrupts -
+	 * disable all SGI and PPI interrupts.
 	 */
-	GIC_DIST_REG32(GIC_DIST_ENABLE_CLEAR) = 0xffff0000;
-	GIC_DIST_REG32(GIC_DIST_ENABLE_SET) = 0x0000ffff;
+	GIC_DIST_REG32(GIC_DIST_ENABLE_CLEAR) = 0xffffffff;
+	GIC_DIST_REG32(GIC_DIST_ENABLE_SET) = 0x00000000;
 
 	/*
 	 * Set priority on PPI and SGI interrupts
@@ -111,7 +94,7 @@ static void gic_cpu_init(void)
 		GIC_DIST_REG32(GIC_DIST_PRI + i * 4 / 4) = 0x0a0a0a0a;
 
 	GIC_CPU_REG32(GIC_CPU_PRIMASK) = 0xf0;
-	GIC_CPU_REG32(GIC_CPU_CTRL) = 1;
+	GIC_CPU_REG32(GIC_CPU_CTRL) = 0;
 }
 
 /**
@@ -152,6 +135,7 @@ void do_irq (struct pt_regs *pt_regs)
 	/* Do not handle SGI and PPI */
 	/* VINTC connect to IRQ 90 at GIC */
 	int gic_is = GIC_DIST_REG32(GIC_DIST_PENDING_SET + 8);
+
 	if (gic_is & (1 << 26)) {
 #endif
 		vintc_is = *((volatile int *) CONFIG_FTINTC0_BASE);
