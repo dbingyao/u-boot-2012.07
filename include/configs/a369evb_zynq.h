@@ -35,7 +35,7 @@
  * CPU
  */
 #define CONFIG_DISPLAY_CPUINFO
-#define CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
+#undef CONFIG_SYS_DCACHE_OFF 	/* define this to disable dcache */
 
 /* Uncache controller register base area */
 #ifndef CONFIG_SYS_DCACHE_OFF
@@ -53,8 +53,15 @@
 /*
  * CPU and Board Configuration Options
  */
-#undef CONFIG_USE_IRQ		/* we don't need IRQ/FIQ stuff */
 
+#define CONFIG_USE_IRQ
+
+#ifdef CONFIG_USE_IRQ
+#define CONFIG_CMD_IRQ
+
+#define CONFIG_STACKSIZE_IRQ     SZ_32K
+#define CONFIG_STACKSIZE_FIQ     SZ_32K
+#endif
 
 /*
  * Timer
@@ -103,7 +110,9 @@
 #define CONFIG_ENV_SIZE 		0x20000
 #define CONFIG_CMD_SAVEENV
 
-/* Init DDR on A369 board from zynq board(SoC) */
+/* Init DDR on A369 board from zynq board(SoC) 
+ * Wake up CPU1
+ */
 #undef CONFIG_SKIP_LOWLEVEL_INIT
 
 /*
@@ -172,10 +181,6 @@
  * The stack sizes are set up in start.S using the settings below
  */
 #define CONFIG_STACKSIZE            SZ_512K
-#ifdef CONFIG_USE_IRQ
-#define CONFIG_STACKSIZE_IRQ        SZ_32K
-#define CONFIG_STACKSIZE_FIQ        SZ_32K
-#endif
 
 /*
  * Network
@@ -264,12 +269,5 @@
 #define CONFIG_SPI_FLASH_STMICRO
 #define CONFIG_SPI_FLASH_SPANSION
 
-#define CONFIG_CMD_IRQ
-#define CONFIG_USE_IRQ
-
-#ifdef CONFIG_USE_IRQ
-#define CONFIG_STACKSIZE_IRQ     SZ_4K
-#define CONFIG_STACKSIZE_FIQ     SZ_4K
-#endif
 
 #endif	/* __CONFIG_H */

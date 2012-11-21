@@ -21,61 +21,87 @@
 #include <asm/arch/a369.h>
 #include <asm/arch/xparameters_ps.h>
 
+#define XPSS_SYS_CTRL_CPU_RST 0x244
+
 	.macro	zynq_setup
 
 	# unlock SLCR
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 8)
-	ldr r2, =0xDF0D
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + 8)
+	ldr	r2, =0xDF0D
+	str	r2, [r1]
 
 	# remap DDR to zero
 	# FILTERSTART
-	ldr r1, =(XPSS_SCU_BASEADDR + 0x40)
-	ldr r2, =0
-	str r2, [r1]
+	ldr	r1, =(XPSS_SCU_BASEADDR + 0x40)
+	ldr	r2, =0
+	str	r2, [r1]
 
 	# Device config APB
 	# unlock the PCAP
-	ldr r1, =(XPSS_DEV_CFG_APB_BASEADDR + 0x34)
-	ldr r2, =0x757BDF0D
-	str r2, [r1]
-	ldr r1, =(XPSS_DEV_CFG_APB_BASEADDR + 0x28)
-	ldr r2, =0xFFFFFFFF
-	str r2, [r1]
+	ldr	r1, =(XPSS_DEV_CFG_APB_BASEADDR + 0x34)
+	ldr	r2, =0x757BDF0D
+	str	r2, [r1]
+	ldr	r1, =(XPSS_DEV_CFG_APB_BASEADDR + 0x28)
+	ldr	r2, =0xFFFFFFFF
+	str	r2, [r1]
 
 	# OCM_CFG
 	# Mask out the ROM
 	# map ram into upper addresses
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR +0x910)
-	ldr r2, =0x1F
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR +0x910)
+	ldr	r2, =0x1F
+	str	r2, [r1]
 	
 	# FPGA_RST_CTRL
 	# clear resets on AXI fabric ports
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x240)
-	ldr r2, =0x0
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + 0x240)
+	ldr	r2, =0x0
+	str	r2, [r1]
 
 	# TZ_DDR_RAM
 	# Set DDR trust zone non-secure
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x430)
-	ldr r2, =0xFFFFFFFF
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + 0x430)
+	ldr	r2, =0xFFFFFFFF
+	str	r2, [r1]
 
 	# set urgent bits with register
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x61C)
-	ldr r2, =0
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + 0x61C)
+	ldr	r2, =0
+	str	r2, [r1]
 
 	# urgent write, ports S2/S3
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x600)
-	ldr r2, =0xC
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + 0x600)
+	ldr	r2, =0xC
+	str	r2, [r1]
+
+	# CPU1 is putted into loop at Stage 0(BootRom)
+	# Wake up CPU1 here and put it into another loop
+	# It will be released during linux OS initialization
+
+	#prepare the place where CPU1 go when wake up
+	adr	r0, secondary
+	mov	r1, #0x0
+	adr	r2, base_addr
+	add	r2, r2, #0x8
+copy_loop:
+	ldmia	r0!, {r9-r10}
+	stmia	r1!, {r9-r10}
+	cmp	r0, r2
+	blo	copy_loop
+
+	# Wake up CPU1
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + XPSS_SYS_CTRL_CPU_RST)
+	mov	r2, #0x22 	/* Stop CLK and reset CPU1 */
+	str	r2, [r1]
+	mov	r2, #0x20 	/* Enable CPU1 */
+	str	r2, [r1]
+	mov	r2, #0x0	/* Enable CLK for CPU1 */
+	str	r2, [r1]
 
 	# relock SLCR
-	ldr r1, =(XPSS_SYS_CTRL_BASEADDR + 0x4)
-	ldr r2, =0x767B
-	str r2, [r1]
+	ldr	r1, =(XPSS_SYS_CTRL_BASEADDR + 0x4)
+	ldr	r2, =0x767B
+	str	r2, [r1]
 
 	.endm
 
@@ -158,3 +184,37 @@ ddr2_config_table:
 	.long	0x93100004, 0x00000001
 	.long	0
 
+	.align	5
+
+	#This code will be moved to address 0 for CPU1 wake up
+secondary:
+	adr 	r2, base_addr
+	ldr 	r3, [r2, #4]
+
+_loop:
+	ldr 	r1, [r3, #0x100]
+	cmp	r1, #0
+	movne	pc, r1
+
+	mov	r1, #0x1
+	str	r1, [r2, #GIC_CPU_CTRL]
+	mov	r1, #0xf0
+	str	r1, [r2, #GIC_CPU_PRIMASK]
+
+	/* ensure the following code reside in the same I-cache line */
+	.align 5
+
+	/* wait for interrupt */
+	wfe
+
+	mov	r1, #0x0
+	str	r1, [r2, #GIC_CPU_CTRL]
+	mov	r1, #0x0
+	str	r1, [r2, #GIC_CPU_PRIMASK]
+
+	b	_loop
+
+base_addr:
+	.long	GIC_CPU_BASE
+	.long	CONFIG_SCU_BASE
+	.long	0xFFFFFFFF
