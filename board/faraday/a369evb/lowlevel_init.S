@@ -82,7 +82,7 @@
 	adr	r0, secondary
 	mov	r1, #0x0
 	adr	r2, base_addr
-	add	r2, r2, #0x8
+	add	r2, r2, #0xc
 copy_loop:
 	ldmia	r0!, {r9-r10}
 	stmia	r1!, {r9-r10}
@@ -188,8 +188,9 @@ ddr2_config_table:
 
 	#This code will be moved to address 0 for CPU1 wake up
 secondary:
-	adr 	r2, base_addr
-	ldr 	r3, [r2, #4]
+	adr 	r1, base_addr
+	ldr 	r2, [r1]
+	ldr 	r3, [r1, #4]
 
 _loop:
 	ldr 	r1, [r3, #0x100]
@@ -205,7 +206,7 @@ _loop:
 	.align 5
 
 	/* wait for interrupt */
-	wfe
+	wfi
 
 	mov	r1, #0x0
 	str	r1, [r2, #GIC_CPU_CTRL]
