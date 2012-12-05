@@ -43,6 +43,7 @@
 #define CONFIG_FTDDRII030_BASE	0x93100000	/* DDR2 Controller */
 #define CONFIG_FTAHBC0_BASE	0x94000000	/* AHBC_0 Controller */
 #define CONFIG_FTAHBC1_BASE	0x94100000	/* AHBC_1 Controller */
+#define CONFIG_FTAHBC2_BASE	0x94200000	/* AHBC_2 Controller */
 #define CONFIG_FTINTC0_BASE	0x90100000	/* Interrupt Controller */
 
 #define	NR_IRQS	32

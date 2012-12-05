@@ -162,6 +162,17 @@ lowlevel_init:
 	str	r2, [r0, #0x34]
 	str	r1, [r0, #0x24]
 
+	/* Some others device access DDR through AHBC2 */
+	ldr	r0, =CONFIG_FTAHBC2_BASE
+	ldr	r2, =0x10000000
+	str	r2, [r0, #0x18]
+	ldr	r2, =0x10100000
+	str	r2, [r0, #0x1C]
+	ldr	r2, =0x10200000
+	str	r2, [r0, #0x2C]
+	ldr	r2, =0x10300000
+	str	r2, [r0, #0x30]
+	str	r1, [r0, #0x20]
 _exit:
 	mov	pc, lr
 
@@ -169,7 +180,8 @@ ddr2_config_table:
 	.long	0x93100000, 0x00005d02
 	.long	0x93100004, 0x00000000
 	.long	0x93100008, 0x00440a52
-	.long	0x93100010, 0x10000045
+	/* Offset 0x10: Assume PHYS_SDRAM_2 is 0xA0000000 */
+	.long	0x93100010, 0xA0000045
 	.long	0x93100018, 0x2b907274
 	.long	0x9310001c, 0x00757251
 	.long	0x93100020, 0x0c80124a
