@@ -23,7 +23,12 @@
 
 PLATFORM_RELFLAGS += -fno-common -ffixed-r8 -msoft-float
 
+ifdef CONFIG_SOC_A320
+PLATFORM_CPPFLAGS += -mcpu=fa526
+else
 PLATFORM_CPPFLAGS += -march=armv4
+endif
+
 # =========================================================================
 #
 # Supply options according to compiler version

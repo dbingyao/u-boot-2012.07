@@ -25,7 +25,7 @@ include $(TOPDIR)/config.mk
 
 LIB	= $(obj)lib$(BOARD).o
 
-COBJS	:= a320evb.o
+COBJS	:= dram.o ../a320-common/a320evb.o ../a320-common/timer.o ../a320-common/ftsdmc020.o
 SOBJS	:= lowlevel_init.o
 
 SRCS	:= $(SOBJS:.o=.S) $(COBJS:.o=.c)

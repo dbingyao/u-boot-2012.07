@@ -23,6 +23,12 @@
 #ifndef __FTSDMC020_H
 #define __FTSDMC020_H
 
+#ifndef __ASSEMBLY__
+
+unsigned int ftsdmc020_init_bank(int bank, unsigned int base);
+
+#endif /* __ASSEMBLY__ */
+
 #define FTSDMC020_OFFSET_TP0		0x00
 #define FTSDMC020_OFFSET_TP1		0x04
 #define FTSDMC020_OFFSET_CR		0x08

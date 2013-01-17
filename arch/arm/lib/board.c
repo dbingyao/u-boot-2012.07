@@ -387,6 +387,8 @@ void board_init_f(ulong bootflag)
 	addr_sp = addr - TOTAL_MALLOC_LEN;
 	debug("Reserving %dk for malloc() at: %08lx\n",
 			TOTAL_MALLOC_LEN >> 10, addr_sp);
+	printf("Reserving %dk for malloc() at: %08lx\n",
+			TOTAL_MALLOC_LEN >> 10, addr_sp);
 	/*
 	 * (permanently) allocate a Board Info struct
 	 * and a permanent copy of the "global" data
@@ -503,13 +505,12 @@ void board_init_r(gd_t *id, ulong dest_addr)
 #endif
 
 	/* The Malloc area is immediately below the monitor copy in DRAM */
-#if defined(PHYS_SDRAM_2) && defined (PHYS_SDRAM_2_SIZE)
-	malloc_start = gd->bd->bi_dram[1].start +
-		       gd->bd->bi_dram[1].size -
-		       TOTAL_MALLOC_LEN;
-	printf("Switch malloc are to Bank #1: %08lx\n", malloc_start);
+#if defined(CONFIG_BOARD_A369) && defined (CONFIG_SOC_ZYNQ)
+	malloc_start = gd->bd->bi_dram[1].start;
+	printf("Switch malloc are to Bank #1: 0x%08lx\n", malloc_start);
 #else
 	malloc_start = dest_addr - TOTAL_MALLOC_LEN;
+	printf("malloc start: 0x%08lx\n", malloc_start);
 #endif
 	mem_malloc_init (malloc_start, TOTAL_MALLOC_LEN);
 

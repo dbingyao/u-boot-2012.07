@@ -161,21 +161,37 @@ static int ftmac100_recv (struct eth_device *dev)
 	if (curr_des->rxdes0 & FTMAC100_RXDES0_RXDMA_OWN)
 		return -1;
 
-	if (curr_des->rxdes0 & (FTMAC100_RXDES0_RX_ERR |
-				FTMAC100_RXDES0_CRC_ERR |
-				FTMAC100_RXDES0_FTL |
-				FTMAC100_RXDES0_RUNT |
-				FTMAC100_RXDES0_RX_ODD_NB)) {
+	if (curr_des->rxdes0 & FTMAC100_RXDES0_RX_ERR) {
+		printf ("%s: Rx Error \n", __func__);
+		return -1;
+	}
+
+	if (curr_des->rxdes0 & FTMAC100_RXDES0_CRC_ERR) {
+		printf ("%s: Rx CRC Error \n", __func__);
+		return -1;
+	}
+
+	if (curr_des->rxdes0 & FTMAC100_RXDES0_FTL) {
+		printf ("%s: Rx Frame too long\n", __func__);
+		return -1;
+	}
+
+	if (curr_des->rxdes0 & FTMAC100_RXDES0_RUNT) {
+		printf ("%s: Rx Frame too short\n", __func__);
+		return -1;
+	}
+
+	if (curr_des->rxdes0 & FTMAC100_RXDES0_RX_ODD_NB) {
+		printf ("%s: Rx odd nibles\n", __func__);
 		return -1;
 	}
 
 	rxlen = FTMAC100_RXDES0_RFL (curr_des->rxdes0);
 
-	debug ("%s(): RX buffer %d, %x received\n",
-	       __func__, priv->rx_index, rxlen);
+	debug ("%s(): RX buffer %d, (%x, %x) %x received\n",
+	       __func__, priv->rx_index, (int)curr_des->rxdes2, rxlen);
 
 	/* pass the packet up to the protocol layers. */
-
 	NetReceive ((void *)curr_des->rxdes2, rxlen);
 
 	/* release buffer to DMA */
@@ -198,22 +214,21 @@ static int ftmac100_send(struct eth_device *dev, void *packet, int length)
 	ulong start;
 
 	if (curr_des->txdes0 & FTMAC100_TXDES0_TXDMA_OWN) {
-		debug ("%s(): no TX descriptor available\n", __func__);
+		printf ("%s(): no TX descriptor available\n", __func__);
 		return -1;
 	}
-
-	debug ("%s(%x, %x)\n", __func__, (int)packet, length);
 
 	length = (length < ETH_ZLEN) ? ETH_ZLEN : length;
 
 	/* initiate a transmit sequence */
 
 	curr_des->txdes2 = (unsigned int)packet;	/* TXBUF_BADR */
-
 	curr_des->txdes1 &= FTMAC100_TXDES1_EDOTR;
 	curr_des->txdes1 |= FTMAC100_TXDES1_FTS |
 			    FTMAC100_TXDES1_LTS |
 			    FTMAC100_TXDES1_TXBUF_SIZE (length);
+
+	debug ("%s(%x, %x, %x)\n", __func__, (int)curr_des->txdes2, (int)packet, length);
 
 	curr_des->txdes0 = FTMAC100_TXDES0_TXDMA_OWN;
 
@@ -226,7 +241,7 @@ static int ftmac100_send(struct eth_device *dev, void *packet, int length)
 	start = get_timer(0);
 	while (curr_des->txdes0 & FTMAC100_TXDES0_TXDMA_OWN) {
 		if (get_timer(start) >= 5) {
-			debug ("%s(): timed out\n", __func__);
+			printf ("%s(): timed out\n", __func__);
 			return -1;
 		}
 	}
@@ -254,7 +269,7 @@ int ftmac100_initialize (bd_t *bd)
 		printf ("%s(): failed to allocate priv\n", __func__);
 		goto free_dev;
 	}
-
+	debug("%s: priv 0x%08x\n", __func__, (int) priv);
 	memset (dev, 0, sizeof (*dev));
 	memset (priv, 0, sizeof (*priv));
 

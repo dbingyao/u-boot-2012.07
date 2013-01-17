@@ -31,26 +31,10 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int board_init(void)
 {
+	gd->bd->bi_arch_number = MACH_TYPE_FARADAY;
 	gd->bd->bi_boot_params = PHYS_SDRAM_1 + 0x100;
 
 	ftsmc020_init();	/* initialize Flash */
-	return 0;
-}
-
-int dram_init(void)
-{
-	unsigned long sdram_base = PHYS_SDRAM_1;
-	unsigned long expected_size = PHYS_SDRAM_1_SIZE;
-	unsigned long actual_size;
-
-	actual_size = get_ram_size((void *)sdram_base, expected_size);
-
-	gd->ram_size = actual_size;
-
-	if (expected_size != actual_size)
-		printf("Warning: Only %lu of %lu MiB SDRAM is working\n",
-				actual_size >> 20, expected_size >> 20);
-
 	return 0;
 }
 

@@ -29,6 +29,7 @@
  */
 #define MACH_TYPE_FARADAY	758
 #define CONFIG_MACH_TYPE	MACH_TYPE_FARADAY
+#define CONFIG_SOC_A320
 
 /*
  * Linux kernel tagged list
@@ -42,6 +43,8 @@
 #undef CONFIG_USE_IRQ		/* we don't need IRQ/FIQ stuff */
 
 #undef CONFIG_SKIP_LOWLEVEL_INIT
+
+#define CONFIG_SYS_RAM_REMAP	/* remap RAM to 0x0 */
 
 /*
  * Power Management Unit
@@ -71,12 +74,22 @@
 #define CONFIG_SYS_NS16550_REG_SIZE	-4
 #define CONFIG_SYS_NS16550_CLK		18432000
 
+/* valid baudrates */
+#define CONFIG_SYS_BAUDRATE_TABLE	{ 9600, 19200, 38400, 57600, 115200 }
+
 /*
  * Ethernet
  */
+#define CONFIG_NET_MULTI
 #define CONFIG_FTMAC100
-
-#define CONFIG_BOOTDELAY	3
+#define CONFIG_ETHADDR		c3:10:da:ce:3f:69  /* used by common/env_common.c */
+#define CONFIG_NETMASK		255.255.255.0
+#define CONFIG_IPADDR		192.168.68.67
+#define CONFIG_SERVERIP 	192.168.68.66
+#define CONFIG_PHY_MAX_ADDR	32
+#define CONFIG_NET_RETRY_COUNT	20
+#define CONFIG_DRIVER_ETHER
+#define CONFIG_CMD_PING
 
 /*
  * Command line configuration.
@@ -143,12 +156,18 @@
 /*
  * Physical Memory Map
  */
-#define CONFIG_NR_DRAM_BANKS	1		/* we have 1 bank of DRAM */
+#define CONFIG_NR_DRAM_BANKS	3		/* we have 3 banks of DRAM */
+#ifndef CONFIG_SYS_RAM_REMAP
 #define PHYS_SDRAM_1		0x10000000	/* SDRAM Bank #1 */
+#else
+#define PHYS_SDRAM_1		0x00000000	/* SDRAM Bank #1 */
+#endif
 #define PHYS_SDRAM_1_SIZE	0x04000000	/* 64 MB */
+#define PHYS_SDRAM_2		(PHYS_SDRAM_1 + 0x08000000)	/* SDRAM Bank #2 SODIMM */
+#define PHYS_SDRAM_3		(PHYS_SDRAM_1 + 0x10000000)	/* SDRAM Bank #3 SODIMM */
 
 #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM_1
-#define CONFIG_SYS_INIT_SP_ADDR		(CONFIG_SYS_SDRAM_BASE + 0x1000 - \
+#define CONFIG_SYS_INIT_SP_ADDR		(CONFIG_SYS_SDRAM_BASE + 0x100000 - \
 					GENERATED_GBL_DATA_SIZE)
 
 /*
@@ -214,8 +233,12 @@
 #define CONFIG_FLASH_CFI_LEGACY
 #define CONFIG_SYS_FLASH_LEGACY_512Kx8
 
+#ifndef CONFIG_SYS_RAM_REMAP
 #define PHYS_FLASH_1			0x00000000
-#define PHYS_FLASH_2			0x00400000
+#else
+#define PHYS_FLASH_1			0x80000000
+#endif
+#define PHYS_FLASH_2			(PHYS_FLASH_1 + 0x00400000)
 #define CONFIG_SYS_FLASH_BASE		PHYS_FLASH_1
 #define CONFIG_SYS_FLASH_BANKS_LIST	{ PHYS_FLASH_1, PHYS_FLASH_2, }
 

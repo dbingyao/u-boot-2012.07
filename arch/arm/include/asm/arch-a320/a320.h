@@ -23,6 +23,7 @@
 /*
  * Hardware register bases
  */
+#define CONFIG_FTAHBC020_BASE	0x90100000	/* AHB Controller */
 #define CONFIG_FTSMC020_BASE	0x90200000	/* Static Memory Controller */
 #define CONFIG_DEBUG_LED	0x902ffffc	/* Debug LED */
 #define CONFIG_FTSDMC020_BASE	0x90300000	/* SDRAM Controller */
