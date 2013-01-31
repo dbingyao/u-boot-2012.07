@@ -507,7 +507,7 @@ void board_init_r(gd_t *id, ulong dest_addr)
 	/* The Malloc area is immediately below the monitor copy in DRAM */
 #if defined(CONFIG_BOARD_A369) && defined (CONFIG_SOC_ZYNQ)
 	malloc_start = gd->bd->bi_dram[1].start;
-	printf("Switch malloc are to Bank #1: 0x%08lx\n", malloc_start);
+	printf("Switch malloc area to Bank #2: 0x%08lx\n", malloc_start);
 #else
 	malloc_start = dest_addr - TOTAL_MALLOC_LEN;
 	printf("malloc start: 0x%08lx\n", malloc_start);
