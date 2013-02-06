@@ -59,20 +59,39 @@ int board_init(void)
 	return 0;
 }
 
-#if defined(PHYS_SDRAM_2) && defined (PHYS_SDRAM_2_SIZE)
 void dram_init_banksize(void)
 {
+	unsigned long sdram_base;
+	unsigned long actual_size;
+	unsigned long expected_size;
+
 	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
 	gd->bd->bi_dram[0].size =  gd->ram_size;
 
-	gd->bd->bi_dram[1].start = PHYS_SDRAM_2;
-	gd->bd->bi_dram[1].size = PHYS_SDRAM_2_SIZE;
-}
+#if defined(PHYS_SDRAM_2) && defined (PHYS_SDRAM_2_SIZE)
+	/* Memory at A369 */
+	sdram_base = PHYS_SDRAM_2;
+	expected_size = PHYS_SDRAM_2_SIZE;
+	actual_size = get_ram_size((void *)sdram_base, expected_size);
+	gd->bd->bi_dram[1].start = sdram_base;
+	gd->bd->bi_dram[1].size  = actual_size;
+	printf("Detect %lu MiB SDRAM at 0x%08lx\n", actual_size >> 20, sdram_base);
 #endif
+}
 
 int dram_init(void)
 {
-	gd->ram_size = CONFIG_SYS_SDRAM_SIZE;
+	unsigned long sdram_base = PHYS_SDRAM_1;
+	unsigned long expected_size = PHYS_SDRAM_1_SIZE;
+	unsigned long actual_size;
+
+	actual_size = get_ram_size((void *)sdram_base, expected_size);
+
+	gd->ram_size = actual_size;
+
+	if (expected_size != actual_size)
+		printf("Warning: Only %lu of %lu MiB SDRAM is working\n",
+				actual_size >> 20, expected_size >> 20);
 
 	return 0;
 }
